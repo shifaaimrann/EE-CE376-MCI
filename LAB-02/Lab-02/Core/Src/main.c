@@ -126,24 +126,50 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  //TASK 0-------------------------------------------------------------------------
   // char msg[]="Hello World!!!!!!!\r\n";
-  int a =4;
-  int b=6;
-  int c=pow(a,2)+(2*a*b)+pow(b,2);
-  int d=pow((a+b),2);
+  // int a =4;
+  // int b=6;
+  // int c=pow(a,2)+(2*a*b)+pow(b,2);
+  // int d=pow((a+b),2);
 
   char str[]="Microcontrollers";
+  char encrypted[50];
+  char decrypted[50];
+
+  int code=10283; //soha student id
+  for (int i=0;str[i]!='\0';i++){
+
+    encrypted[i]=str[i]+(code%256);
+
+  }
+  encrypted[strlen(encrypted)]='\0';
+  //DECRYPTING THE ENCRYPTED
+  for (int i=0;encrypted[i]!='\0';i++){
+    decrypted[i]=encrypted[i]-(code%256);
+
+  }
+  decrypted[strlen(decrypted)]='\0';
+  
+
   while (1)
   {
+    
     /* USER CODE END WHILE */
+    //TASK1-----------------------------------------------------------------------------------------
     // int x=42;
     // int y=3;
     // myprintf("Value of x=%d, Value of y=%d\r\n",x,y);
     /* USER CODE BEGIN 3 */
+    //TASK2-----------------------------------------------------------------------------------------
     // myprintf("(a+b)^2=%d, a^2+2ab+b^2=%d",d,c);
-
-    
-    //HAL_Delay(1000);
+    myprintf("Before Encrypting: %s\n" ,str);
+    HAL_Delay(1000);
+    myprintf("AFter Encrypting: %s\n",encrypted);
+    HAL_Delay(1000);
+    myprintf("Decrypted String: %s\n",decrypted);
+    HAL_Delay(1000);
+  
   }
   /* USER CODE END 3 */
 
