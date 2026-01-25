@@ -215,13 +215,13 @@ int main(void)
   //   print_matrix_int(2, 2, result);
   //    HAL_Delay(1000);
     
-    // HAL_Delay(3000); // 3 second pause before repeating
+    
     // --- TASK 6: Armstrong Number Check ---
     myprintf("Armstrong Numbers between 100 and 999:\r\n");
     for (int i=100;i<1000;i++) {
         if (isArmstrong(i)) {
             myprintf("=%d\r\n", i);
-            HAL_Delay(1000); // Short delay for readability
+            HAL_Delay(1000); 
         }
     }
   }
@@ -520,3 +520,4 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
