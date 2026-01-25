@@ -23,6 +23,7 @@
 #include "stdarg.h"
 #include "stdio.h"
 #include "stm32f3xx_hal.h"
+#include <stdbool.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -81,38 +82,69 @@ static void MX_USB_PCD_Init(void);
 void myprintf(const char *fmt, ...)
 {
   char buffer[128];
-  // buffer[0]='\0';
   va_list args;
-  va_start(args,fmt);
-  int n=vsnprintf(buffer, sizeof(buffer), fmt,args);
+  va_start(args, fmt);
+  int n = vsnprintf(buffer, sizeof(buffer), fmt, args);
   va_end(args);
-  
-  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, sizeof(buffer), HAL_MAX_DELAY);
+
+  if (n > 0) {
+    
+    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, n, HAL_MAX_DELAY);
+  }
 }
+void print_matrix_int(int rows, int cols, const int *m)
+{
+  for (int i = 0; i < rows; ++i) {
+    for (int j = 0; j < cols; ++j) {
+      myprintf("%d ", m[i*cols + j]);
+    }
+    myprintf("\r\n");
+  }
+}
+bool isArmstrong(int num)
+{
+    int originalNum, remainder, result = 0;
+    originalNum = num;
+    
+
+    while (originalNum != 0) {
+        remainder = originalNum % 10;
+        result += pow(remainder, 3);
+        originalNum /= 10;
+    }
+
+    return (result == num);
+}
+/* USER CODE BEGIN 0 */
+// No changes here
+/* USER CODE END 0 */
 int main(void)
 {
-
   /* USER CODE BEGIN 1 */
+  // --- TASK 0: Math Variables ---
+  int a = 4;
+  int b = 6;
+  int c = (a * a) + (2 * a * b) + (b * b); // a^2 + 2ab + b^2
+  int d = (a + b) * (a + b);               // (a + b)^2
 
+  // --- TASK 5: Matrix Data & Calculation ---
+  int arr[4] = {1, 2, 3, 4};               // Matrix A
+  int arr2[4] = {5, 6, 7, 8};              // Matrix B
+  int result[4];                           // Result Matrix
+
+  for (int i = 0; i < 2; i++) {
+    for (int j = 0; j < 2; j++) {
+      result[i * 2 + j] = 0;
+      for (int k = 0; k < 2; k++) {
+        result[i * 2 + j] += arr[i * 2 + k] * arr2[k * 2 + j];
+      }
+    }
+  }
   /* USER CODE END 1 */
 
-  /* MCU Configuration--------------------------------------------------------*/
-
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  /* MCU Configuration --------------------------------------------------------*/
   HAL_Init();
-
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
   SystemClock_Config();
-
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
@@ -120,63 +152,81 @@ int main(void)
   MX_SPI1_Init();
   MX_USART2_UART_Init();
   MX_USB_PCD_Init();
-  /* USER CODE BEGIN 2 */
 
+  /* USER CODE BEGIN 2 */
+  // --- TASK 3:--------------------------------------------
+  char str[] = "Microcontrollers";
+  char encrypted[50];
+  char decrypted[50];
+  int code = 10283; // Student ID
+  int idx;
+  for (idx = 0; str[idx] != '\0'; idx++) {
+    encrypted[idx] = str[idx] + (code % 256);
+  }
+  encrypted[idx] = '\0'; 
+
+  for (idx = 0; encrypted[idx] != '\0'; idx++) {
+    decrypted[idx] = encrypted[idx] - (code % 256);
+  }
+  decrypted[idx] = '\0'; 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  //TASK 0-------------------------------------------------------------------------
-  // char msg[]="Hello World!!!!!!!\r\n";
-  // int a =4;
-  // int b=6;
-  // int c=pow(a,2)+(2*a*b)+pow(b,2);
-  // int d=pow((a+b),2);
-
-  char str[]="Microcontrollers";
-  char encrypted[50];
-  char decrypted[50];
-
-  int code=10283; //soha student id
-  for (int i=0;str[i]!='\0';i++){
-
-    encrypted[i]=str[i]+(code%256);
-
-  }
-  encrypted[strlen(encrypted)]='\0';
-  //DECRYPTING THE ENCRYPTED
-  for (int i=0;encrypted[i]!='\0';i++){
-    decrypted[i]=encrypted[i]-(code%256);
-
-  }
-  decrypted[strlen(decrypted)]='\0';
-  
-
   while (1)
   {
-    
     /* USER CODE END WHILE */
-    //TASK1-----------------------------------------------------------------------------------------
-    // int x=42;
-    // int y=3;
-    // myprintf("Value of x=%d, Value of y=%d\r\n",x,y);
+
     /* USER CODE BEGIN 3 */
-    //TASK2-----------------------------------------------------------------------------------------
-    // myprintf("(a+b)^2=%d, a^2+2ab+b^2=%d",d,c);
-    myprintf("Before Encrypting: %s\n" ,str);
-    HAL_Delay(1000);
-    myprintf("AFter Encrypting: %s\n",encrypted);
-    HAL_Delay(1000);
-    myprintf("Decrypted String: %s\n",decrypted);
-    HAL_Delay(1000);
-  
+    // Separator for clarity in terminal
+    
+
+    // --- TASK 2: Printing Simple Variables ---
+    // int x = 42;
+    // float y = 3.14;
+    // myprintf("Task 2: x = %d, y = %d\r\n", x, y);
+    // HAL_Delay(1000);
+
+    // // --- TASK 3: Comparing Math Results ---
+    // myprintf("Task 3: (a+b)^2 = %d, a^2+2ab+b^2 = %d\r\n", d, c);
+    // HAL_Delay(1000);
+
+    // --- TASK 4: Encryption/Decryption Output ---
+    // myprintf("Original: %s\r\n", str);
+    // HAL_Delay(1000);
+    // myprintf("Encrypted: %s\r\n", encrypted);
+    // HAL_Delay(1000);
+    // myprintf("Decrypted: %s\r\n", decrypted);
+    // HAL_Delay(1000);
+
+
+    // --- TASK 5: Matrix Results ---
+    
+  //   myprintf("Matrix A:\r\n");
+  //   HAL_Delay(1000);
+  //   print_matrix_int(2, 2, arr);
+  //   HAL_Delay(1000);
+  //   myprintf("Matrix B:\r\n");
+  //    HAL_Delay(1000);
+  //   print_matrix_int(2, 2, arr2);
+  //  HAL_Delay(1000);
+  //   myprintf("Result of A x B:\r\n");
+  //    HAL_Delay(1000);
+  //   print_matrix_int(2, 2, result);
+  //    HAL_Delay(1000);
+    
+    // HAL_Delay(3000); // 3 second pause before repeating
+    // --- TASK 6: Armstrong Number Check ---
+    myprintf("Armstrong Numbers between 100 and 999:\r\n");
+    for (int i=100;i<1000;i++) {
+        if (isArmstrong(i)) {
+            myprintf("=%d\r\n", i);
+            HAL_Delay(1000); // Short delay for readability
+        }
+    }
   }
   /* USER CODE END 3 */
-
-  
-  
-} 
-
+}
 /**
   * @brief System Clock Configuration
   * @retval None
