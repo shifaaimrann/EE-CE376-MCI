@@ -135,6 +135,16 @@ int main(void)
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
 
+  // (a) Store student ID in an array
+  uint8_t id[] = {1, 0, 3, 2, 0};
+  uint8_t len = sizeof(id) / sizeof(id[0]);
+  uint8_t idx = 0;
+
+  GPIO_PinState prev = GPIO_PIN_RESET;
+
+  // Show first digit initially
+  display_hex(id[idx]);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -142,15 +152,43 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-    for (uint8_t i = 0; i < 16; i++)
+
+    //TASK 1----------------------------------------------------------------------------------------------------------------------
+    // for (uint8_t i = 0; i < 16; i++)
+    // {
+    //   display_hex(i);
+    //   HAL_Delay(2000);
+    // }
+
+    //TASK 2----------------------------------------------------------------------------------------------------------------------
+    GPIO_PinState now = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0); // USER button PA0
+
+    // (b) Detect press (rising edge)
+    if (now == GPIO_PIN_SET && prev == GPIO_PIN_RESET)
     {
-      display_hex(i);
-      HAL_Delay(2000);
+      // (c) Debounce
+      // HAL_Delay(50);
+
+      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET)
+      {
+        idx++;
+
+        // (d) Wrap to first digit after last
+        if (idx >= len)
+          idx = 0;
+
+        display_hex(id[idx]);
+
+        // wait for release to avoid repeated increments
+        while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET);
+      }
     }
+
+    prev = now;
+  }
 
 
     /* USER CODE BEGIN 3 */
-  }
   /* USER CODE END 3 */
 }
 
