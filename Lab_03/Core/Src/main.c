@@ -19,6 +19,28 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include <stdint.h>
+#include <stdlib.h>
+
+static const uint8_t HEX[16] =
+{
+  0x40, // 0
+  0x79, // 1
+  0x24, // 2
+  0x30, // 3
+  0x19, // 4
+  0x12, // 5
+  0x02, // 6
+  0x78, // 7
+  0x00, // 8
+  0x10, // 9
+  0x08, // A
+  0x03, // b
+  0x46, // C
+  0x21, // d
+  0x06, // E
+  0x0E  // F
+};
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -65,33 +87,6 @@ static void MX_USB_PCD_Init(void);
 /* USER CODE BEGIN 0 */
 
 /* USER CODE END 0 */
-
-/**
-  * @brief  The application entry point.
-  * @retval int
-  */
-static const uint8_t HEX[16] =
-{
-  0x40, // 0
-  0x79, // 1
-  0x24, // 2
-  0x30, // 3
-  0x19, // 4
-  0x12, // 5
-  0x02, // 6
-  0x78, // 7
-  0x00, // 8
-  0x10, // 9
-  0x08, // A
-  0x03, // b
-  0x46, // C
-  0x21, // d
-  0x06, // E
-  0x0E  // F
-};
-
-
-
 void display_hex(uint8_t n)
 {
   uint8_t p = HEX[n & 0x0F];
@@ -104,7 +99,10 @@ void display_hex(uint8_t n)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, (p & 0x20) ? GPIO_PIN_SET : GPIO_PIN_RESET); // f
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, (p & 0x40) ? GPIO_PIN_SET : GPIO_PIN_RESET); // g
 }
-
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
 int main(void)
 {
 
@@ -135,15 +133,16 @@ int main(void)
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
 
-  // (a) Store student ID in an array
+  //Task2------------------------------------------------------------------------------------------------
   uint8_t id[] = {1, 0, 3, 2, 0};
   uint8_t len = sizeof(id) / sizeof(id[0]);
   uint8_t idx = 0;
-
   GPIO_PinState prev = GPIO_PIN_RESET;
-
-  // Show first digit initially
   display_hex(id[idx]);
+  //Task3------------------------------------------------------------------------------------------------
+  uint8_t count = 0;                  // counter value (0..15)
+  GPIO_PinState prev_pa0 = GPIO_PIN_RESET;
+  GPIO_PinState prev_pb5 = GPIO_PIN_RESET;
 
   /* USER CODE END 2 */
 
@@ -161,36 +160,58 @@ int main(void)
     // }
 
     //TASK 2----------------------------------------------------------------------------------------------------------------------
-    GPIO_PinState now = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0); // USER button PA0
+    // GPIO_PinState now = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0); // USER button PA0
+    // if (now == GPIO_PIN_SET && prev == GPIO_PIN_RESET)
+    // {if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET)
+    //   {
+    //     idx++;
 
-    // (b) Detect press (rising edge)
-    if (now == GPIO_PIN_SET && prev == GPIO_PIN_RESET)
-    {
-      // (c) Debounce
-      // HAL_Delay(50);
+    //     if (idx >= len) // (d) Wrap to first digit after last
+    //       idx = 0;
 
-      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET)
-      {
-        idx++;
+    //     display_hex(id[idx]);
+    //     while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET);
+    //   }
+    // }
 
-        // (d) Wrap to first digit after last
-        if (idx >= len)
-          idx = 0;
+    // prev = now;
 
-        display_hex(id[idx]);
+    //TASK 3----------------------------------------------------------------------------------------------------------------------
 
-        // wait for release to avoid repeated increments
-        while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET);
-      }
-    }
+    // GPIO_PinState now_pa0 = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0); // USER button (+1)
+    // GPIO_PinState now_pb5 = HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5); // External button (-1)
 
-    prev = now;
-  }
+    // // ---- PA0 pressed: increment ----
+    // if (now_pa0 == GPIO_PIN_SET && prev_pa0 == GPIO_PIN_RESET)
+    // {
+    //   HAL_Delay(50); // debounce
+    //   if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET)
+    //   {
+    //     count = (count + 1) & 0x0F;   // wrap 0..15
+    //     display_hex(count);
+    //     while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET); // wait release
+    //   }
+    // }
+
+    // // ---- PB5 pressed: decrement ----
+    // if (now_pb5 == GPIO_PIN_SET && prev_pb5 == GPIO_PIN_RESET)
+    // {
+    //   HAL_Delay(50); // debounce
+    //   if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5) == GPIO_PIN_SET)
+    //   {
+    //     count = (count - 1) & 0x0F;   // wrap 0..15 (underflow becomes F)
+    //     display_hex(count);
+    //     while (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_5) == GPIO_PIN_SET); // wait release
+    //   }
+    // }
+
+    // prev_pa0 = now_pa0;
+    // prev_pb5 = now_pb5;
 
 
-    /* USER CODE BEGIN 3 */
-  /* USER CODE END 3 */
-}
+    //TASK 4----------------------------------------------------------------------------------------------------------------------
+
+  }}
 
 /**
   * @brief System Clock Configuration
@@ -420,6 +441,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
