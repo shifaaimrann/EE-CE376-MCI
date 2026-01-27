@@ -134,15 +134,18 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   //Task2------------------------------------------------------------------------------------------------
-  uint8_t id[] = {1, 0, 3, 2, 0};
-  uint8_t len = sizeof(id) / sizeof(id[0]);
-  uint8_t idx = 0;
+  // uint8_t id[] = {1, 0, 3, 2, 0};
+  // uint8_t len = sizeof(id) / sizeof(id[0]);
+  // uint8_t idx = 0;
+  // GPIO_PinState prev = GPIO_PIN_RESET;
+  // display_hex(id[idx]);
+  // //Task3------------------------------------------------------------------------------------------------
+  // uint8_t count = 0;                  // counter value (0..15)
+  // GPIO_PinState prev_pa0 = GPIO_PIN_RESET;
+  // GPIO_PinState prev_pb5 = GPIO_PIN_RESET;
+  //Task4------------------------------------------------------------------------------------------------
   GPIO_PinState prev = GPIO_PIN_RESET;
-  display_hex(id[idx]);
-  //Task3------------------------------------------------------------------------------------------------
-  uint8_t count = 0;                  // counter value (0..15)
-  GPIO_PinState prev_pa0 = GPIO_PIN_RESET;
-  GPIO_PinState prev_pb5 = GPIO_PIN_RESET;
+  uint8_t value;
 
   /* USER CODE END 2 */
 
@@ -210,6 +213,28 @@ int main(void)
 
 
     //TASK 4----------------------------------------------------------------------------------------------------------------------
+    GPIO_PinState now = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0); // USER button PA0
+
+    // Detect button press (rising edge)
+    if (now == GPIO_PIN_SET && prev == GPIO_PIN_RESET)
+    {
+      HAL_Delay(50); // debounce
+
+      if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET)
+      {
+        // Generate random number between 1 and 6
+        value = (rand() % 6) + 1;
+
+        // Display using same segment logic as Task 1
+        display_hex(value);
+
+        // Wait for button release
+        while (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET);
+      }
+    }
+
+    prev = now;
+
 
   }}
 
