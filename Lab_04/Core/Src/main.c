@@ -47,6 +47,13 @@ SPI_HandleTypeDef hspi1;
 TIM_HandleTypeDef htim2;
 
 PCD_HandleTypeDef hpcd_USB_FS;
+extern TIM_HandleTypeDef htim2;
+
+/* Software counters (in milliseconds) */
+volatile uint32_t countA = 0;
+volatile uint32_t countB = 0;
+volatile uint32_t countC = 0;
+
 
 /* USER CODE BEGIN PV */
 
@@ -74,11 +81,32 @@ static void MX_USB_PCD_Init(void);
   */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  // Check that the interrupt is from TIM2 (important if multiple timers exist)
   if (htim->Instance == TIM2)
   {
-    HAL_GPIO_TogglePin(LD9_GPIO_Port, LD9_Pin);
-    // Toggle LED pin (LD9) every 1 second
+    countA++;
+    countB++;
+    countC++;
+
+    // LED A → 500 ms (1 Hz blink)
+    if (countA >= 500)
+    {
+      HAL_GPIO_TogglePin(LD5_GPIO_Port, LD5_Pin);
+      countA = 0;
+    }
+
+    // LED B → 200 ms (2.5 Hz blink)
+    if (countB >= 200)
+    {
+      HAL_GPIO_TogglePin(LD9_GPIO_Port, LD9_Pin);
+      countB = 0;
+    }
+
+    // LED C → 100 ms (5 Hz blink)
+    if (countC >= 100)
+    {
+      HAL_GPIO_TogglePin(LD7_GPIO_Port, LD7_Pin);
+      countC = 0;
+    }
   }
 }
 
@@ -283,7 +311,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 47999;
+  htim2.Init.Prescaler = 47;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 999;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
