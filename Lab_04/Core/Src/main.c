@@ -53,7 +53,6 @@ PCD_HandleTypeDef hpcd_USB_FS;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
-void delay_ms_tim2(uint32_t ms); //function declaration
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
@@ -73,17 +72,14 @@ static void MX_USB_PCD_Init(void);
   * @brief  The application entry point.
   * @retval int
   */
-void delay_ms_tim2(uint32_t ms)
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  __HAL_TIM_SET_COUNTER(&htim2, 0);          // CNT = 0 (start counting from zero)
-  HAL_TIM_Base_Start(&htim2);               // start TIM2 counting (polling, no IRQ)
-
-  while (__HAL_TIM_GET_COUNTER(&htim2) < ms) // wait until CNT reaches ms
+  // Check that the interrupt is from TIM2 (important if multiple timers exist)
+  if (htim->Instance == TIM2)
   {
-               // do nothing (busy wait / polling)
+    HAL_GPIO_TogglePin(LD9_GPIO_Port, LD9_Pin);
+    // Toggle LED pin (LD9) every 1 second
   }
-
-  HAL_TIM_Base_Stop(&htim2);                // stop TIM2 to save power (optional)
 }
 
 int main(void)
@@ -121,11 +117,11 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  HAL_TIM_Base_Start_IT(&htim2);
+
   while (1)
   {
     /* USER CODE END WHILE */
-    HAL_GPIO_TogglePin(LD9_GPIO_Port, LD9_Pin); // flip LED state (ON->OFF, OFF->ON)
-    delay_ms_tim2(1000);                        // wait 1000 ms = 1 second using TIM2
 
     /* USER CODE BEGIN 3 */
   }
@@ -289,7 +285,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 47999;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 65535;
+  htim2.Init.Period = 999;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
