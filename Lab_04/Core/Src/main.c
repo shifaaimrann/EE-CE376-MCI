@@ -18,6 +18,9 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include <stdio.h>
+#include <string.h>
+
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -46,16 +49,19 @@ SPI_HandleTypeDef hspi1;
 
 TIM_HandleTypeDef htim2;
 
+UART_HandleTypeDef huart2;
+
 PCD_HandleTypeDef hpcd_USB_FS;
-extern TIM_HandleTypeDef htim2;
-
-/* Software counters (in milliseconds) */
-volatile uint32_t countA = 0;
-volatile uint32_t countB = 0;
-volatile uint32_t countC = 0;
-
 
 /* USER CODE BEGIN PV */
+extern TIM_HandleTypeDef htim2;
+extern UART_HandleTypeDef huart2;   // <-- change if your UART is different
+
+volatile uint32_t last_capture = 0;
+volatile uint32_t period_ticks = 0;
+volatile float frequency_hz = 0.0f;
+
+#define TIM2_TICK_HZ 1000000UL      // PSC=47 at 48MHz -> 1MHz tick (1 us)
 
 /* USER CODE END PV */
 
@@ -66,6 +72,7 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_USB_PCD_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -73,42 +80,33 @@ static void MX_USB_PCD_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  if (htim->Instance == TIM2 &&
+      htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+  {
+    uint32_t current_capture =
+        HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+
+    if (current_capture >= last_capture)
+      period_ticks = current_capture - last_capture;
+    else
+      period_ticks =
+          (htim->Instance->ARR + 1U - last_capture) + current_capture;
+
+    last_capture = current_capture;
+
+    if (period_ticks != 0)
+      frequency_hz = 1000000.0f / period_ticks;
+  }
+}
+
 /* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
   * @retval int
   */
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  if (htim->Instance == TIM2)
-  {
-    countA++;
-    countB++;
-    countC++;
-
-    // LED A → 500 ms (1 Hz blink)
-    if (countA >= 500)
-    {
-      HAL_GPIO_TogglePin(LD5_GPIO_Port, LD5_Pin);
-      countA = 0;
-    }
-
-    // LED B → 200 ms (2.5 Hz blink)
-    if (countB >= 200)
-    {
-      HAL_GPIO_TogglePin(LD9_GPIO_Port, LD9_Pin);
-      countB = 0;
-    }
-
-    // LED C → 100 ms (5 Hz blink)
-    if (countC >= 100)
-    {
-      HAL_GPIO_TogglePin(LD7_GPIO_Port, LD7_Pin);
-      countC = 0;
-    }
-  }
-}
 
 int main(void)
 {
@@ -139,20 +137,31 @@ int main(void)
   MX_SPI1_Init();
   MX_TIM2_Init();
   MX_USB_PCD_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 
+
+  char msg[64];
+   //char msg[] = "USART2 TEST OK\r\n";
   while (1)
   {
-    /* USER CODE END WHILE */
+    // Print about 5 times per second (so UART isn't spammed)
+    float f = frequency_hz;  // copy to local variable
 
-    /* USER CODE BEGIN 3 */
+    int n = snprintf(msg, sizeof(msg), "Freq: %.2f Hz\r\n", f);
+    HAL_UART_Transmit(&huart2, (uint8_t*)msg, (uint16_t)n, 100);
+
+    HAL_Delay(200);
+    // HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg)-1, 100);
+    // HAL_Delay(1000);
   }
+
   /* USER CODE END 3 */
 }
 
@@ -195,7 +204,9 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USB|RCC_PERIPHCLK_USART2
+                              |RCC_PERIPHCLK_I2C1;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_HSI;
   PeriphClkInit.USBClockSelection = RCC_USBCLKSOURCE_PLL;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
@@ -306,6 +317,7 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_IC_InitTypeDef sConfigIC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -313,7 +325,7 @@ static void MX_TIM2_Init(void)
   htim2.Instance = TIM2;
   htim2.Init.Prescaler = 47;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 999;
+  htim2.Init.Period = 65535;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -325,15 +337,62 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
   {
     Error_Handler();
   }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
   /* USER CODE BEGIN TIM2_Init 2 */
 
   /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
 
 }
 
