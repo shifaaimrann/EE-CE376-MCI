@@ -202,31 +202,31 @@ int main(void)
 
     // --- TASK 5: Matrix Results ---
     
-  //   myprintf("Matrix A:\r\n");
-  //   HAL_Delay(1000);
-  //   print_matrix_int(2, 2, arr);
-  //   HAL_Delay(1000);
-  //   myprintf("Matrix B:\r\n");
-  //    HAL_Delay(1000);
-  //   print_matrix_int(2, 2, arr2);
-  //  HAL_Delay(1000);
-  //   myprintf("Result of A x B:\r\n");
-  //    HAL_Delay(1000);
-  //   print_matrix_int(2, 2, result);
-  //    HAL_Delay(1000);
+    myprintf("Matrix A:\r\n");
+    HAL_Delay(1000);
+    print_matrix_int(2, 2, arr);
+    HAL_Delay(1000);
+    myprintf("Matrix B:\r\n");
+     HAL_Delay(1000);
+    print_matrix_int(2, 2, arr2);
+   HAL_Delay(1000);
+    myprintf("Result of A x B:\r\n");
+     HAL_Delay(1000);
+    print_matrix_int(2, 2, result);
+     HAL_Delay(1000);
     
     
     // --- TASK 6: Armstrong Number Check ---
-    myprintf("Armstrong Numbers between 100 and 999:\r\n");
-    for (int i=100;i<1000;i++) {
-        if (isArmstrong(i)) {
-            myprintf("=%d\r\n", i);
-            HAL_Delay(1000); 
-        }
-    }
-  }
+  //   myprintf("Armstrong Numbers between 100 and 999:\r\n");
+  //   for (int i=100;i<1000;i++) {
+  //       if (isArmstrong(i)) {
+  //           myprintf("=%d\r\n", i);
+  //           HAL_Delay(1000); 
+  //       }
+  //   }
+  // }
   /* USER CODE END 3 */
-}
+}}
 /**
   * @brief System Clock Configuration
   * @retval None
