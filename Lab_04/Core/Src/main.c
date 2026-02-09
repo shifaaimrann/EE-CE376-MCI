@@ -115,6 +115,79 @@ void myprintf(const char *fmt, ...)
   * @brief  The application entry point.
   * @retval int
   */
+//TASK 1----------------------------------------------------------------------------------------------------------
+// void delay_ms_tim2(uint32_t ms)
+// {
+//  __HAL_TIM_SET_COUNTER(&htim2, 0);          // CNT = 0 (start counting from zero)
+//  HAL_TIM_Base_Start(&htim2);               // start TIM2 counting (polling, no IRQ)
+
+
+//  while (__HAL_TIM_GET_COUNTER(&htim2) < ms) // wait until CNT reaches ms
+//  {
+//               // do nothing (busy wait / polling)
+//  }
+
+
+//  HAL_TIM_Base_Stop(&htim2);                // stop TIM2 to save power (optional)
+// }
+
+//TASK 2----------------------------------------------------------------------------------------------------------
+// void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+// {
+//  // Check that the interrupt is from TIM2 (important if multiple timers exist)
+//  if (htim->Instance == TIM2)
+//  {
+//    HAL_GPIO_TogglePin(LD9_GPIO_Port, LD9_Pin);
+//    // Toggle LED pin (LD9) every 1 second
+//  }
+// }
+
+//TASK 3----------------------------------------------------------------------------------------------------------
+
+
+// void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+// {
+//  if (htim->Instance == TIM2)
+//  {
+//    countA++;
+//    countB++;
+//    countC++;
+
+
+//    // LED A → 500 ms (1 Hz blink)
+//    if (countA >= 500)
+//    {
+//      HAL_GPIO_TogglePin(LD5_GPIO_Port, LD5_Pin);
+//      countA = 0;
+//    }
+
+
+//    // LED B → 200 ms (2.5 Hz blink)
+//    if (countB >= 200)
+//    {
+//      HAL_GPIO_TogglePin(LD9_GPIO_Port, LD9_Pin);
+//      countB = 0;
+//    }
+
+
+//    // LED C → 100 ms (5 Hz blink)
+//    if (countC >= 100)
+//    {
+//      HAL_GPIO_TogglePin(LD7_GPIO_Port, LD7_Pin);
+//      countC = 0;
+//    }
+//  }
+// }
+
+// extern TIM_HandleTypeDef htim2;
+
+
+// /* Software counters (in milliseconds) */
+// volatile uint32_t countA = 0;
+// volatile uint32_t countB = 0;
+// volatile uint32_t countC = 0;
+
+//TASK 4----------------------------------------------------------------------------------------------------------
 void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
 {
   // confirm this event is from TIM2 and Channel 1
@@ -184,16 +257,21 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+  //TASK 2-------------------------------------------------------------------------------------------------------------------
+  //HAL_TIM_Base_Start_IT(&htim2);
+  //TASK 4-------------------------------------------------------------------------------------------------------------------
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 
-  myprintf("Starting TIM2 CH1 Input Capture...\r\n");
-
-
-
-  
-   //char msg[] = "USART2 TEST OK\r\n";
   while (1)
   {
+    //TASK 1------------------------------------------------------------------------------------------------------------------
+    // HAL_GPIO_TogglePin(LD9_GPIO_Port, LD9_Pin); // flip LED state (ON->OFF, OFF->ON)
+    // delay_ms_tim2(1000);                        // wait 1000 ms = 1 second using TIM2
+
+
+
+    //TASK 4------------------------------------------------------------------------------------------------------------------
     // /Copy volatile values to local variables (safer for printing)
     uint32_t p = period_ticks;
     uint32_t  f = frequency_hz;
