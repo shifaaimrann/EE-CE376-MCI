@@ -20,6 +20,8 @@
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>   // va_list, va_start, va_end
+
 
 
 /* Private includes ----------------------------------------------------------*/
@@ -79,27 +81,33 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+void myprintf(const char *fmt, ...)
 {
-  if (htim->Instance == TIM2 &&
-      htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+  char buffer[128];                 // message buffer
+  va_list args;                     // holds variable arguments
+  va_start(args, fmt);              // start reading arguments after fmt
+
+  int n = vsnprintf(buffer, sizeof(buffer), fmt, args);
+  // vsnprintf writes formatted text into buffer and returns number of chars
+
+  va_end(args);                     // done reading variable arguments
+
+  if (n < 0)
   {
-    uint32_t current_capture =
-        HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-
-    if (current_capture >= last_capture)
-      period_ticks = current_capture - last_capture;
-    else
-      period_ticks =
-          (htim->Instance->ARR + 1U - last_capture) + current_capture;
-
-    last_capture = current_capture;
-
-    if (period_ticks != 0)
-      frequency_hz = 1000000.0f / period_ticks;
+    return;                         // formatting error
   }
+
+  // IMPORTANT: send only the actual message length (not sizeof(buffer))
+  // If n is larger than buffer, clamp to buffer size - 1
+  if (n > (int)sizeof(buffer) - 1)
+  {
+    n = (int)sizeof(buffer) - 1;
+  }
+
+  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, (uint16_t)n, HAL_MAX_DELAY);
+  // transmit formatted string via USART2
 }
+
 
 /* USER CODE END 0 */
 
@@ -107,6 +115,35 @@ void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
   * @brief  The application entry point.
   * @retval int
   */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  // confirm this event is from TIM2 and Channel 1
+  if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+  {
+    uint32_t current_capture = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+    // CCR1 contains the timer count value captured at the edge
+
+    // Compute period in ticks with overflow handling
+    if (current_capture >= last_capture)
+    {
+      period_ticks = current_capture - last_capture;
+    }
+    else
+    {
+      // Timer wrapped around from ARR to 0 between edges
+      period_ticks = (htim->Instance->ARR + 1U - last_capture) + current_capture;
+    }
+
+    last_capture = current_capture;
+
+    // Convert ticks -> frequency
+    // frequency = tick_hz / period_ticks
+    if (period_ticks != 0)
+    {
+      frequency_hz = (float)TIM2_TICK_HZ / (float)period_ticks;
+    }
+  }
+}
 
 int main(void)
 {
@@ -138,7 +175,10 @@ int main(void)
   MX_TIM2_Init();
   MX_USB_PCD_Init();
   MX_USART2_UART_Init();
+
   /* USER CODE BEGIN 2 */
+  
+  
 
   /* USER CODE END 2 */
 
@@ -146,25 +186,28 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 
+  myprintf("Starting TIM2 CH1 Input Capture...\r\n");
 
-  char msg[64];
+
+
+  
    //char msg[] = "USART2 TEST OK\r\n";
   while (1)
   {
-    // Print about 5 times per second (so UART isn't spammed)
-    float f = frequency_hz;  // copy to local variable
+    // /Copy volatile values to local variables (safer for printing)
+    uint32_t p = period_ticks;
+    uint32_t  f = frequency_hz;
 
-    int n = snprintf(msg, sizeof(msg), "Freq: %.2f Hz\r\n", f);
-    HAL_UART_Transmit(&huart2, (uint8_t*)msg, (uint16_t)n, 100);
+    // Print results over UART2
+    // period is in microseconds because tick = 1 us
+    myprintf("Period = %lu us, Frequency = %.2lu Hz\r\n", p, f);
 
-    HAL_Delay(200);
-    // HAL_UART_Transmit(&huart2, (uint8_t*)msg, sizeof(msg)-1, 100);
-    // HAL_Delay(1000);
+    HAL_Delay(200); // print 5 times per second
+  }
+
   }
 
   /* USER CODE END 3 */
-}
-
 /**
   * @brief System Clock Configuration
   * @retval None
