@@ -115,13 +115,10 @@ int main(void)
     // for (uint32_t ccr = 0; ccr <= 999; ccr++)
     // {
     //   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, ccr);
-    //   // Update CCR -> changes duty cycle
-
     //   HAL_Delay(2);  
       
     // }
 
-    // // Fade OUT: duty cycle from 100% to 0%
     // for (int32_t ccr = 999; ccr >= 0; ccr--)
     // {
     //   __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, ccr);
@@ -440,3 +437,4 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
