@@ -74,30 +74,29 @@ static void MX_TIM3_Init(void);
   */
 static uint16_t speed_to_ccr(uint8_t speed)
 {
-  return (uint16_t)((speed * 1000U) / 255U);   // 1000 = ARR+1
+  return (uint16_t)((speed * 1000U) / 255U);   
 }
 
 static void RightMotor_Forward(uint8_t speed)
 {
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_SET);    // PD8 = HIGH (forward)
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, GPIO_PIN_RESET);  // PD9 = LOW
-  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, speed_to_ccr(speed)); // PWM duty
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_SET);    
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, GPIO_PIN_RESET);  
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, speed_to_ccr(speed)); 
 }
 
 static void RightMotor_Backward(uint8_t speed)
 {
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_RESET);  // PD8 = LOW
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, GPIO_PIN_SET);    // PD9 = HIGH (backward)
-  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, speed_to_ccr(speed)); // PWM duty
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_RESET);  
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, GPIO_PIN_SET);    
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, speed_to_ccr(speed)); 
 }
 
 static void RightMotor_Stop(void)
 {
-  // According to your table, HIGH/HIGH or LOW/LOW stops.
-  // We'll use HIGH/HIGH.
+  
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, GPIO_PIN_SET);
-  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);        // PWM = 0
+  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);       
 }
 
 
@@ -141,21 +140,21 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-     // Forward at speed 180/255 for 3 seconds
+     
   RightMotor_Forward(180);
-  HAL_Delay(3000);
+  HAL_Delay(3000);// Forward at speed 180/255 for 3 seconds
 
-  // Stop for 1 second
+  
   RightMotor_Stop();
-  HAL_Delay(1000);
+  HAL_Delay(1000);// Stop for 1 second
 
-  // Backward at speed 180/255 for 3 seconds
+  
   RightMotor_Backward(180);
-  HAL_Delay(3000);
+  HAL_Delay(3000);// Backward at speed 180/255 for 3 seconds
 
-  // Stop for 1 second
   RightMotor_Stop();
-  HAL_Delay(1000);
+  HAL_Delay(1000);  // Stop for 1 second
+
 
   }
   /* USER CODE END 3 */
@@ -481,3 +480,4 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
