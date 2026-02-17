@@ -18,14 +18,14 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include <string.h>
-#include <stdio.h>
-#include <stdarg.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <string.h>
+#include <stdio.h>
+#include <stdarg.h>
 /* USER CODE END Includes */
+
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
@@ -54,17 +54,31 @@ UART_HandleTypeDef huart2;
 PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
-#define SAMPLES 10
+//TASK1-------------------------------------------------------------------------------------------
+// #define SAMPLES 10
 
-volatile uint32_t cap[SAMPLES];
-volatile uint8_t  idx = 0;
-volatile uint8_t  started = 0;
-volatile uint8_t  print_flag = 0;
+// volatile uint32_t cap[SAMPLES];
+// volatile uint8_t  idx = 0;
+// volatile uint8_t  started = 0;
+// volatile uint8_t  print_flag = 0;
 
-uint32_t last_check = 0;
+// uint32_t last_check = 0;
 
-// As per handout formula: f = (8e6) / (2 * avg_period)
-#define NUMERATOR 4800000.0f
+// // As per handout formula: f = (8e6) / (2 * avg_period)
+// #define NUMERATOR 4800000.0f
+
+//TASK2-------------------------------------------------------------------------------------------
+
+// TIM2 configured for 48 MHz clock, PSC = 47  => 1 us per tick
+// ARR = 65535, CH1 Input Capture on Rising edge, TIM2 NVIC enabled
+
+volatile uint32_t ic1 = 0;
+volatile uint32_t ic2 = 0;
+volatile uint32_t period_us = 0;
+volatile uint8_t  got_first = 0;
+volatile uint8_t  new_data  = 0;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,35 +106,62 @@ void myprintf(const char *fmt, ...)
   HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
 }
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-  if(GPIO_Pin == GPIO_PIN_4)   // <-- change to your EXTI pin
-  {
-    if(started == 0)
-    {
-      __HAL_TIM_SET_COUNTER(&htim2, 0);
-      HAL_TIM_Base_Start(&htim2);
-      started = 1;
-    }
-    else
-    {
-      cap[idx] = __HAL_TIM_GET_COUNTER(&htim2);
-      idx++;
+//TASK1----------------------------------------------------------------------------------
+// void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+// {
+//   if(GPIO_Pin == GPIO_PIN_4)   // <-- change to your EXTI pin
+//   {
+//     if(started == 0)
+//     {
+//       __HAL_TIM_SET_COUNTER(&htim2, 0);
+//       HAL_TIM_Base_Start(&htim2);
+//       started = 1;
+//     }
+//     else
+//     {
+//       cap[idx] = __HAL_TIM_GET_COUNTER(&htim2);
+//       idx++;
 
-      if(idx >= SAMPLES)
+//       if(idx >= SAMPLES)
+//       {
+//         idx = 0;
+//         print_flag = 1;
+//         HAL_TIM_Base_Stop(&htim2);
+//         started = 0;
+//       }
+//       else
+//       {
+//         __HAL_TIM_SET_COUNTER(&htim2, 0);
+//       }
+//     }
+//   }
+// }
+
+
+
+  void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+  {
+    if(htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+    {
+      if(got_first == 0)
       {
-        idx = 0;
-        print_flag = 1;
-        HAL_TIM_Base_Stop(&htim2);
-        started = 0;
+        ic1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+        got_first = 1;
       }
       else
       {
-        __HAL_TIM_SET_COUNTER(&htim2, 0);
+        ic2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+
+        if(ic2 >= ic1)
+          period_us = ic2 - ic1;
+        else
+          period_us = (65535 - ic1) + ic2 + 1;   // overflow wrap
+
+        got_first = 0;
+        new_data  = 1;
       }
     }
   }
-}
 
 /* USER CODE END 0 */
 
@@ -159,39 +200,65 @@ int main(void)
   MX_USB_PCD_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  myprintf("Task1: GPIO EXTI + TIM2 Frequency Measurement\r\n");
+  //TASK1-------------------------------------------------------------------------
+  // myprintf("Task1: GPIO EXTI + TIM2 Frequency Measurement\r\n");
+
+  //TASK2--------------------------------------------------------------------------
+  myprintf("Task2: TIM2 CH1 Input Capture (integer output)\r\n");
+
+  HAL_TIM_Base_Start(&htim2);
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-{
-  if(HAL_GetTick() - last_check >= 100)
   {
-    last_check = HAL_GetTick();
 
-    if(print_flag)
+//   if(HAL_GetTick() - last_check >= 100)
+//   {
+//     last_check = HAL_GetTick();
+
+//     if(print_flag)
+//     {
+//       uint64_t sum = 0;
+
+//       for(int i = 0; i < SAMPLES; i++)
+//       {
+//         sum += cap[i];
+//       }
+
+//       uint32_t avg_period = (float)sum / (float)SAMPLES;
+
+//       // STRICT formula from sheet:
+//       // f = (48 x 10^6) / (2 x average period)
+//       uint32_t f = NUMERATOR / (avg_period);
+
+//       myprintf("avg_period=%lu, f=%lu Hz\r\n", avg_period, f);
+
+//       print_flag = 0;
+//     }
+//   }
+// }
+    /* USER CODE END WHILE */
+
+
+  if(new_data)
+  {
+    new_data = 0;
+
+    if(period_us > 0)
     {
-      uint64_t sum = 0;
+      // integer frequency in Hz (truncates)
+      uint32_t f_hz = 1000000u / period_us;
 
-      for(int i = 0; i < SAMPLES; i++)
-      {
-        sum += cap[i];
-      }
-
-      uint32_t avg_period = (float)sum / (float)SAMPLES;
-
-      // STRICT formula from sheet:
-      // f = (48 x 10^6) / (2 x average period)
-      uint32_t f = NUMERATOR / (avg_period);
-
-      myprintf("avg_period=%lu, f=%lu Hz\r\n", avg_period, f);
-
-      print_flag = 0;
+      myprintf("Period=%lu us, f=%lu Hz\r\n", period_us, f_hz);
     }
   }
-}
 
+    /* USER CODE BEGIN 3 */
+  }
   /* USER CODE END 3 */
 }
 
@@ -347,14 +414,15 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_IC_InitTypeDef sConfigIC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 9;
+  htim2.Init.Prescaler = 47;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
+  htim2.Init.Period = 65535;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
@@ -366,9 +434,21 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -461,6 +541,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
@@ -494,7 +575,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : PA4 */
   GPIO_InitStruct.Pin = GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
