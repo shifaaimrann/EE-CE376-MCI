@@ -26,7 +26,6 @@
 #include <stdarg.h>
 /* USER CODE END Includes */
 
-
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
 
@@ -55,15 +54,30 @@ UART_HandleTypeDef huart2;
 PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
-// TIM2: 48 MHz, PSC=47 => 1 us per tick => timer frequency = 1,000,000 Hz
-#define TIMER_HZ   1000000u
+//TASK 3----------------------------------------------------------------------
+// // TIM2: 48 MHz, PSC=47 => 1 us per tick => timer frequency = 1,000,000 Hz
+// #define TIMER_HZ   1000000u
 
-// Encoder PPR (pulses per revolution) - SET THIS CORRECTLY
-#define PPR        20u     // <-- change to your encoder PPR
+// // Encoder PPR (pulses per revolution) - SET THIS CORRECTLY
+// #define PPR        20u     // <-- change to your encoder PPR
+
+// uint32_t last_print = 0;
+//TASK4-----------------------------------------------------------------------
+// 48MHz with PSC=47 => 1us tick => 1,000,000 ticks/sec
+#define TIMER_HZ 1000000u
+
+// From your results, PPR is 20
+#define PPR 20u
+
+volatile uint32_t ic1 = 0;
+volatile uint32_t ic2 = 0;
+volatile uint32_t period_us = 0;
+volatile uint8_t  got_first = 0;
+volatile uint8_t  new_data = 0;
 
 uint32_t last_print = 0;
-/* USER CODE END PV */
 
+/* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
@@ -100,8 +114,29 @@ static void wait_falling(GPIO_TypeDef *port, uint16_t pin)
   // Wait HIGH -> LOW
   while (HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET) { }
 }
-/* USER CODE END 0 */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  if(htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+  {
+    if(!got_first)
+    {
+      ic1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+      got_first = 1;
+    }
+    else
+    {
+      ic2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
 
+      if(ic2 >= ic1) period_us = ic2 - ic1;
+      else           period_us = (65535 - ic1) + ic2 + 1;
+
+      got_first = 0;
+      new_data  = 1;
+    }
+  }
+}
+
+/* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
@@ -117,6 +152,7 @@ int main(void)
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -139,27 +175,44 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
+  //TASK3-----------------------------------------------------------------------------------
 // ----- Right motor control (from your table) -----
 // Shield D8  -> PD8 (DIR1)
 // Shield D12 -> PD9 (DIR2)
 // Shield D10 -> PB4 (PWM)
 
 // Start PWM (TIM3 CH1 on PB4 assumed from your previous labs)
+// HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+
+// // Direction: Forward => D8=HIGH, D12=LOW
+// HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_SET);
+// HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, GPIO_PIN_RESET);
+
+// // Set duty cycle (example assumes ARR=999 => 50% = 500)
+// __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 500);
+
+// // Start TIM2 base (for timing encoder pulses)
+// HAL_TIM_Base_Start(&htim2);
+
+// myprintf("Task3: Encoder RPM (Polling) + Right Motor PWM\r\n");
+
+// ---- Start motor (Right motor) ----
+// D8->PD8, D12->PD9, D10(PWM)->PB4(TIM3_CH1)
 HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
 
-// Direction: Forward => D8=HIGH, D12=LOW
+// Forward: D8=HIGH, D12=LOW
 HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_SET);
 HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, GPIO_PIN_RESET);
 
-// Set duty cycle (example assumes ARR=999 => 50% = 500)
+// Duty (assumes ARR=999; change compare as you want)
 __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 500);
 
-// Start TIM2 base (for timing encoder pulses)
-HAL_TIM_Base_Start(&htim2);
+// ---- Start input capture for encoder on TIM2 CH1 (PA0) ----
+HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
 
-myprintf("Task3: Encoder RPM (Polling) + Right Motor PWM\r\n");
-/* USER CODE END 2 */
+myprintf("Task4: Encoder RPM using TIM2_CH1 Input Capture (PA0)\r\n");
 
+  /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -167,37 +220,58 @@ while (1)
 {
   // Encoder pin: Shield D4 -> PA4
   // Measure time between two consecutive FALLING edges
+  //TASK3-----------------------------------------------------------------------------------------
+  // __HAL_TIM_SET_COUNTER(&htim2, 0);
 
-  __HAL_TIM_SET_COUNTER(&htim2, 0);
+  // // first falling edge
+  // wait_falling(GPIOA, GPIO_PIN_4);
 
-  // first falling edge
-  wait_falling(GPIOA, GPIO_PIN_4);
+  // __HAL_TIM_SET_COUNTER(&htim2, 0);
 
-  __HAL_TIM_SET_COUNTER(&htim2, 0);
+  // wait_falling(GPIOA, GPIO_PIN_4);
 
-  wait_falling(GPIOA, GPIO_PIN_4);
+  // uint32_t period_us = __HAL_TIM_GET_COUNTER(&htim2); // ticks in us
 
-  uint32_t period_us = __HAL_TIM_GET_COUNTER(&htim2); // ticks in us
-
-  if (period_us > 0)
-  {
-    uint32_t freq_hz = TIMER_HZ / period_us;
+  // if (period_us > 0)
+  // {
+  //   uint32_t freq_hz = TIMER_HZ / period_us;
 
     
-    uint32_t rpm = (uint32_t)((60ull * (uint64_t)freq_hz) / (uint64_t)PPR);
+  //   uint32_t rpm = (uint32_t)((60ull * (uint64_t)freq_hz) / (uint64_t)PPR);
 
-    if (HAL_GetTick() - last_print >= 200)
+  //   if (HAL_GetTick() - last_print >= 200)
+  //   {
+  //     last_print = HAL_GetTick();
+  //     myprintf("period=%lu us, f=%lu Hz, rpm=%lu\r\n", period_us, freq_hz, rpm);
+  //   }
+  // }
+
+  if(new_data)
+  {
+    new_data = 0;
+
+    if(period_us > 0)
     {
-      last_print = HAL_GetTick();
-      myprintf("period=%lu us, f=%lu Hz, rpm=%lu\r\n", period_us, freq_hz, rpm);
+      uint32_t freq_hz = TIMER_HZ / period_us;                 // Hz (integer)
+      uint32_t rpm = (uint32_t)((60ull * freq_hz) / PPR);      // RPM (integer)
+
+      // print every ~200ms
+      if(HAL_GetTick() - last_print >= 200)
+      {
+        last_print = HAL_GetTick();
+        myprintf("period=%lu us, f=%lu Hz, rpm=%lu\r\n", period_us, freq_hz, rpm);
+      }
     }
   }
-}
-/* USER CODE END WHILE */
 
+
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
   /* USER CODE END 3 */
-}
 
+}
 /**
   * @brief System Clock Configuration
   * @retval None
@@ -350,6 +424,7 @@ static void MX_TIM2_Init(void)
 
   TIM_ClockConfigTypeDef sClockSourceConfig = {0};
   TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_IC_InitTypeDef sConfigIC = {0};
 
   /* USER CODE BEGIN TIM2_Init 1 */
 
@@ -369,9 +444,21 @@ static void MX_TIM2_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -542,12 +629,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : B1_Pin */
-  GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA4 */
   GPIO_InitStruct.Pin = GPIO_PIN_4;
