@@ -18,12 +18,14 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "stm32f3xx_hal_adc_ex.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+
 
 /* USER CODE END Includes */
 
@@ -54,7 +56,9 @@ UART_HandleTypeDef huart2;
 PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
-volatile uint16_t adc_raw ;
+volatile uint16_t adc_raw = 0;
+volatile uint8_t adc_ready = 0;
+volatile uint32_t vin_mv=0;
 
 
 /* USER CODE END PV */
@@ -86,19 +90,6 @@ void myprintf(const char *fmt, ...)
    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
-{
-   if (hadc->Instance == ADC1)
-   {
-       adc_raw = (uint16_t)HAL_ADC_GetValue(hadc);
-      uint32_t vin_mv = ((uint32_t)adc_raw * 3000U) / 4095;
-
-   myprintf("D=%u  Vin=%lu mV\r\n", adc_raw, vin_mv);
-
-   HAL_Delay(50); 
-       
-   }
-}
 
 /* USER CODE END 0 */
 
@@ -137,8 +128,8 @@ int main(void)
   MX_USB_PCD_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  //HAL_ADC_Start_IT(&hadc1);
-  HAL_ADC_Start_IT(&hadc1);
+  
+  
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -146,31 +137,24 @@ int main(void)
   
   while (1)
 {
-  // uint32_t vin_mv = ((uint32_t)adc_raw * 3000U) / 4095;
+  HAL_ADC_Start_IT(&hadc1);
 
-  //  myprintf("D=%u  Vin=%lu mV\r\n", adc_raw, vin_mv);
+if (adc_ready)
+   {
+       adc_ready = 0;
 
-  //  HAL_Delay(50); 
+       // Lab formula rearranged:
+       // Vin = (D * Vref) / (2^n - 1)
+       // n=12 => (2^n - 1)=4095
+       // Vref = 3300 mV (use 3000 only if your reference is 3.0V)
+          myprintf("D=%u  Vin=%lu mV\r\n", adc_raw, vin_mv);
 
-//   myprintf("HELLO\r\n");
-// HAL_Delay(1000);
 
-  // HAL_ADC_Start(&hadc1);
+       
+   }
 
-  // HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-
-  // adc_raw = (uint16_t)HAL_ADC_GetValue(&hadc1);
-
-  // HAL_ADC_Stop(&hadc1);
-
-  // uint32_t mv = ((uint32_t)adc_raw * 3300U) / 4095U;
-
-  // myprintf("ADC=%u V=%lu mV\r\n", adc_raw, mv);
-
-  // HAL_Delay(200);
-// myprintf("Hello World!!!!!!!\r\n");
-// HAL_Delay(1000);
-
+   HAL_Delay(50);
+   
 }
 
 
@@ -254,10 +238,10 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
-  hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIGCONV_T6_TRGO;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;//changed
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;//changed
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 1;
   hadc1.Init.DMAContinuousRequests = DISABLE;
@@ -282,7 +266,7 @@ static void MX_ADC1_Init(void)
   sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
-  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_61CYCLES_5;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -341,6 +325,16 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 2 */
 
+}
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+   if (hadc->Instance == ADC1)
+   {
+       adc_raw = (uint16_t)HAL_ADC_GetValue(hadc);
+       vin_mv = ((uint32_t)adc_raw * 3300U) / 4095U;
+       adc_ready = 1;
+      
+   }
 }
 
 /**
