@@ -54,11 +54,18 @@ UART_HandleTypeDef huart2;
 PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
+
 #define FILTER_LEN 10
 
 volatile uint16_t adc_raw = 0;
 volatile uint8_t  adc_ready = 0;
 volatile uint32_t vin_mv = 0;
+
+// For filtering (float in volts or mV; here I use volts)
+static float32_t inputBuffer[FILTER_LEN];
+static uint32_t  bufIndex = 0;
+static float32_t filtered_v = 0.0f;
+
 
 /* USER CODE END PV */
 
@@ -76,6 +83,44 @@ static void MX_USB_PCD_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+void myprintf(const char *fmt, ...)
+{
+    char buffer[128];
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
+
+    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
+}
+
+
+static float32_t apply_moving_average(float32_t new_sample)
+{
+    inputBuffer[bufIndex] = new_sample;
+    bufIndex++;
+    if (bufIndex >= FILTER_LEN) bufIndex = 0;
+
+    arm_mean_f32(inputBuffer, FILTER_LEN, &filtered_v);
+    return filtered_v;
+}
+
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
+{
+    if (hadc->Instance == ADC1)
+    {
+        adc_raw = (uint16_t)HAL_ADC_GetValue(hadc);
+
+        // Convert to mV exactly like you do
+        vin_mv = ((uint32_t)adc_raw * 3300U) / 4095U;
+
+        adc_ready = 1;
+    }
+}
+
 
 /* USER CODE END 0 */
 
@@ -114,6 +159,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
+  HAL_ADC_Start_IT(&hadc1);
 
   /* USER CODE END 2 */
 
@@ -122,6 +168,25 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+    HAL_ADC_Start_IT(&hadc1);
+
+if (adc_ready)
+{
+   adc_ready = 0;
+
+   // raw voltage in volts for filtering
+   float32_t raw_v = (float32_t)vin_mv / 1000.0f;
+
+   // Apply 10-sample moving average
+   float32_t filt_v = apply_moving_average(raw_v);
+
+   // Print CSV for Python: raw,filtered
+   myprintf("%0.4f,%0.4f\r\n", raw_v, filt_v);
+
+   
+}
+
+HAL_Delay(50);
 
     /* USER CODE BEGIN 3 */
   }
@@ -204,7 +269,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
