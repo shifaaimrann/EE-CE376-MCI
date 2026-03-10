@@ -55,16 +55,21 @@ PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
 
-#define FILTER_LEN 10
 
+#define FILTER_LEN   10        // 10-point moving average filter window
+
+ADC_HandleTypeDef  hadc1;
+UART_HandleTypeDef huart2;
+
+// Filter buffer — stores last 10 ADC samples
+float32_t inputBuffer[FILTER_LEN];
+float32_t output;              // Filtered output value
+uint8_t   bufIndex = 0;        // Circular buffer index
+
+// Raw ADC value (used in interrupt mode)
 volatile uint16_t adc_raw = 0;
-volatile uint8_t  adc_ready = 0;
-volatile uint32_t vin_mv = 0;
+volatile uint8_t  adc_ready = 0;  // Flag: new 
 
-// For filtering (float in volts or mV; here I use volts)
-static float32_t inputBuffer[FILTER_LEN];
-static uint32_t  bufIndex = 0;
-static float32_t filtered_v = 0.0f;
 
 
 /* USER CODE END PV */
@@ -84,40 +89,45 @@ static void MX_USB_PCD_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+// -------------------------------------------------------
+// Custom UART printf
+// -------------------------------------------------------
 void myprintf(const char *fmt, ...)
 {
     char buffer[128];
+    memset(buffer, 0, sizeof(buffer));
     va_list args;
-
     va_start(args, fmt);
     vsnprintf(buffer, sizeof(buffer), fmt, args);
     va_end(args);
-
     HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
 }
 
-
-static float32_t apply_moving_average(float32_t new_sample)
+// -------------------------------------------------------
+// Apply 10-point moving average filter using CMSIS DSP
+// Stores new sample in circular buffer
+// Computes mean of last 10 samples using arm_mean_f32()
+// -------------------------------------------------------
+void apply_moving_average(float32_t new_sample)
 {
+    // Store new sample in circular buffer (overwrites oldest sample)
     inputBuffer[bufIndex] = new_sample;
-    bufIndex++;
-    if (bufIndex >= FILTER_LEN) bufIndex = 0;
+    bufIndex = (bufIndex + 1) % FILTER_LEN;   // Wrap around at 10
 
-    arm_mean_f32(inputBuffer, FILTER_LEN, &filtered_v);
-    return filtered_v;
+    // Compute mean of all 10 samples in buffer using CMSIS DSP
+    arm_mean_f32(inputBuffer, FILTER_LEN, &output);
 }
 
-
+// -------------------------------------------------------
+// ADC Conversion Complete Callback (Interrupt Mode only)
+// Called automatically by HAL when ADC conversion is done
+// -------------------------------------------------------
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
     if (hadc->Instance == ADC1)
     {
-        adc_raw = (uint16_t)HAL_ADC_GetValue(hadc);
-
-        // Convert to mV exactly like you do
-        vin_mv = ((uint32_t)adc_raw * 3300U) / 4095U;
-
-        adc_ready = 1;
+        adc_raw = HAL_ADC_GetValue(&hadc1);   // Read converted value
+        adc_ready = 1;                         // Set flag for main loop
     }
 }
 
