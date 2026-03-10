@@ -21,9 +21,15 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <string.h>
-#include <stdio.h>
-#include <stdarg.h>    // Required for va_list, va_start, va_end
+#include "main.h"
+#include "stdarg.h"
+#include "stdio.h"
+#include "stm32f3xx_hal.h"
+#include "stm32f3xx_hal_spi.h"
+#include "string.h"
+#include "math.h"
+#include <stdint.h>
+
 
 /* USER CODE END Includes */
 
@@ -55,23 +61,53 @@ UART_HandleTypeDef huart2;
 // SPI_HandleTypeDef hspi1;
 // UART_HandleTypeDef huart2;
 // Gyroscope register addresses
-#define GYRO_WHO_AM_I_REG   0x0F   // WHO_AM_I register
-#define GYRO_READ_BIT       0x80   // Bit 7 = 1 for READ operation
-#define CTRL_REG1           0x20   // Control register 1
-#define CTRL_REG1_VAL       0b00001111  // PD=1 (power on), X/Y/Z axes enabled
-#define TEMP_REG            0x26   // Temperature output register (I3G4250D)
 
-SPI_HandleTypeDef hspi1;
-UART_HandleTypeDef huart2;
+//TASK2------------------------------------------------------------------------------
+// #define GYRO_WHO_AM_I_REG   0x0F   // WHO_AM_I register
+// #define GYRO_READ_BIT       0x80   // Bit 7 = 1 for READ operation
+// #define CTRL_REG1           0x20   // Control register 1
+// #define CTRL_REG1_VAL       0b00001111  // PD=1 (power on), X/Y/Z axes enabled
+// #define TEMP_REG            0x26   // Temperature output register (I3G4250D)
 
-// Buffers for SPI interrupt mode
-uint8_t tx_buf[1];    // Transmit buffer (sends register address command)
-uint8_t rx_buf[1];    // Receive buffer  (receives temperature byte)
+// SPI_HandleTypeDef hspi1;
+// UART_HandleTypeDef huart2;
 
-// State flag to track where we are in the read sequence
-// 0 = just sent register address, waiting to receive
-// 1 = data received, ready to print
-volatile uint8_t spi_state = 0;
+// // Buffers for SPI interrupt mode
+// uint8_t tx_buf[1];    // Transmit buffer (sends register address command)
+// uint8_t rx_buf[1];    // Receive buffer  (receives temperature byte)
+
+// // State flag to track where we are in the read sequence
+// // 0 = just sent register address, waiting to receive
+// // 1 = data received, ready to print
+// volatile uint8_t spi_state = 0;
+
+//TASK3---------------------------------------------------------------------------------
+
+// // Gyroscope register addresses
+// #define CTRL_REG1       0x0F
+// #define CTRL_REG1_VAL   0b00001111 // Power on, enable X/Y/Z axes
+// #define CTRL_REG4       0x23
+// #define CTRL_REG4_VAL   0b00000000  // FS[1:0] = 00 => +/- 245 dps
+
+// #define GYRO_READ_BIT   0x80        // Bit 7 = 1 for READ
+
+// // Angular velocity output registers (low and high bytes)
+// #define OUT_X_L   0x28
+// #define OUT_X_H   0x29
+// #define OUT_Y_L   0x2A
+// #define OUT_Y_H   0x2B
+// #define OUT_Z_L   0x2C
+// #define OUT_Z_H   0x2D
+
+// // Temperature register
+// #define OUT_TEMP  0x26
+
+// // Sensitivity for +/-245 dps range
+// #define SENSITIVITY  0.00875f      // 8.75 mdps/LSB = 0.00875 dps/LSB
+
+// SPI_HandleTypeDef hspi1;
+// UART_HandleTypeDef huart2;
+
 
 /* USER CODE END PV */
 
@@ -86,85 +122,102 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void myprintf(const char *fmt, ...)
-{
-  char buffer[128];
-  va_list args;
+
+#define CTRL_REG1 0x20
+#define CTRL_REG1_VAL 0b10001111 // Power on , enable X, Y, Z axes
+#define CTRL_REG4 0x23
+#define CTRL_REG4_VAL 0b00000000 // FS [1:0] = 00 => +/- 245 dps
+#define OUT_TEMP           0x26
+#define OUT_X_L            0x28
+#define OUT_X_H            0x29
+#define OUT_Y_L            0x2A
+#define OUT_Y_H            0x2B
+#define OUT_Z_L            0x2C
+#define OUT_Z_H            0x2D
+#define CS_LOW()  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_RESET)
+#define CS_HIGH() HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET)
+int32_t x_offset = 0;
+int32_t y_offset = 0;
+int32_t z_offset = 0;
 
 
-  va_start(args, fmt);
-  vsnprintf(buffer, sizeof(buffer), fmt, args);
-  va_end(args);
+// Function declarations
+void myPrintf(const char *fmt, ...);
+void gyro_init ();
+void gyro_set_ctrl_reg4 ();
+void spi_write(uint8_t reg, uint8_t value);
+uint8_t spi_read(uint8_t reg);
+void gyro_calibrate();
 
 
-  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-}
-void gyro_init()
-{
-    uint8_t tx[2] = { CTRL_REG1, CTRL_REG1_VAL };
+//TASK2-----------------------------------------------------------------------------
 
-    // CS LOW — begin SPI communication
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_RESET);
+// void gyro_init()
+// {
+//     uint8_t tx[2] = { CTRL_REG1, CTRL_REG1_VAL };
 
-    // Send CTRL_REG1 address + value in one transmission (polling is fine for init)
-    HAL_SPI_Transmit(&hspi1, tx, 2, HAL_MAX_DELAY);
+//     // CS LOW — begin SPI communication
+//     HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_RESET);
 
-    // CS HIGH — end SPI communication
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
-}
+//     // Send CTRL_REG1 address + value in one transmission (polling is fine for init)
+//     HAL_SPI_Transmit(&hspi1, tx, 2, HAL_MAX_DELAY);
 
-// -------------------------------------------------------
-// Starts an interrupt-based SPI read of the temperature register
-// Step 1: Send the command byte (register address + read bit)
-//         When TX is done, HAL_SPI_TxCpltCallback fires
-// -------------------------------------------------------
-void Gyro_RequestTemperature()
-{
-    tx_buf[0] = GYRO_READ_BIT | TEMP_REG;  // 0x80 | 0x26 = 0xA6 (read temp register)
+//     // CS HIGH — end SPI communication
+//     HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
+// }
 
-    // CS LOW — begin SPI communication
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_RESET);
+// // -------------------------------------------------------
+// // Starts an interrupt-based SPI read of the temperature register
+// // Step 1: Send the command byte (register address + read bit)
+// //         When TX is done, HAL_SPI_TxCpltCallback fires
+// // -------------------------------------------------------
+// void Gyro_RequestTemperature()
+// {
+//     tx_buf[0] = GYRO_READ_BIT | TEMP_REG;  // 0x80 | 0x26 = 0xA6 (read temp register)
 
-    // Send command byte in interrupt mode (non-blocking)
-    HAL_SPI_Transmit_IT(&hspi1, tx_buf, 1);
+//     // CS LOW — begin SPI communication
+//     HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_RESET);
 
-    // Execution continues immediately — callback will fire when done
-}
+//     // Send command byte in interrupt mode (non-blocking)
+//     HAL_SPI_Transmit_IT(&hspi1, tx_buf, 1);
 
-// -------------------------------------------------------
-// Callback: Called automatically when TX (transmit) is complete
-// Step 2: Now that we sent the register address,
-//         receive the temperature byte from gyroscope
-// -------------------------------------------------------
-void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
-{
-    if (hspi->Instance == SPI1)
-    {
-        // TX done — now receive the temperature data in interrupt mode
-        HAL_SPI_Receive_IT(&hspi1, rx_buf, 1);
-      myprintf("TxCplt fired\r\n"); // debug — does TX callback fire?
+//     // Execution continues immediately — callback will fire when done
+// }
 
-    }
-}
+// // -------------------------------------------------------
+// // Callback: Called automatically when TX (transmit) is complete
+// // Step 2: Now that we sent the register address,
+// //         receive the temperature byte from gyroscope
+// // -------------------------------------------------------
+// void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
+// {
+//     if (hspi->Instance == SPI1)
+//     {
+//         // TX done — now receive the temperature data in interrupt mode
+//         HAL_SPI_Receive_IT(&hspi1, rx_buf, 1);
+//       myprintf("TxCplt fired\r\n"); // debug — does TX callback fire?
 
-// -------------------------------------------------------
-// Callback: Called automatically when RX (receive) is complete
-// Step 3: Temperature byte is now in rx_buf[0]
-//         CS HIGH to end communication, then send over UART
-// -------------------------------------------------------
-void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
-{
-    if (hspi->Instance == SPI1)
-    {
-        HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
-        int8_t temperature = (int8_t)rx_buf[0];
+//     }
+// }
+
+// // -------------------------------------------------------
+// // Callback: Called automatically when RX (receive) is complete
+// // Step 3: Temperature byte is now in rx_buf[0]
+// //         CS HIGH to end communication, then send over UART
+// // -------------------------------------------------------
+// void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
+// {
+//     if (hspi->Instance == SPI1)
+//     {
+//         HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
+//         int8_t temperature = (int8_t)rx_buf[0];
         
-        // Send as ASCII text with newline so Python readline() works
-        myprintf("%d\n", temperature);
+//         // Send as ASCII text with newline so Python readline() works
+//         myprintf("%d\n", temperature);
         
-        spi_state = 1;
-    }
-}
+//         spi_state = 1;
+//     }
+// }
 
 //TASK 1-------------------------------------------------------------------------
 
@@ -229,41 +282,67 @@ int main(void)
   
   // myprintf("WHO_AM_I = 0x%02X\r\n", who_am_i);
   // CS HIGH at startup — gyroscope deselected/idle
-    HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
+  //TASK2----------------------------------------------------------------------------
+    // HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
 
-    // Wait for gyroscope to power up
-    HAL_Delay(100);
+    // // Wait for gyroscope to power up
+    // HAL_Delay(100);
 
-    // Power on gyroscope and enable axes
-    gyro_init();
+    // // Power on gyroscope and enable axes
+    // gyro_init();
 
-    HAL_Delay(10);  // Small delay after init before first read
+    // HAL_Delay(10);  // Small delay after init before first read
 
-    // Trigger the first temperature read
-    Gyro_RequestTemperature();
+    // // Trigger the first temperature read
+    // Gyro_RequestTemperature();
+  //TASK3----------------------------------------------------------------------------------
+    
 
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  
+  /* USER CODE BEGIN 2 */
+  
+  gyro_init();
+  gyro_set_ctrl_reg4();
+  gyro_calibrate();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    
+    uint8_t buffer[6];
+    uint8_t reg = 0x28 | 0x80 | 0x40; // OUT_X_L (0x28) + Read bit (0x80) + Auto-increment (0x40)
 
-    // When RxCpltCallback sets flag, trigger next read
-    if (spi_state == 1)
-    {
-        spi_state = 0;         // Reset flag
-        HAL_Delay(500);        // Wait 500ms between reads
-        Gyro_RequestTemperature();  // Trigger next read
-    }
+    // 1. Perform a Burst Read for X, Y, and Z
+    CS_LOW();
+    HAL_SPI_Transmit(&hspi1, &reg, 1, HAL_MAX_DELAY);
+    HAL_SPI_Receive(&hspi1, buffer, 6, HAL_MAX_DELAY);
+    CS_HIGH();
 
-      
+    // 2. Reconstruct 16-bit signed values from the buffer
+    int16_t x_raw = (int16_t)((buffer[1] << 8) | buffer[0]);
+    int16_t y_raw = (int16_t)((buffer[3] << 8) | buffer[2]);
+    int16_t z_raw = (int16_t)((buffer[5] << 8) | buffer[4]);
 
-    /* USER CODE END WHILE */
+    // 3. Subtract offsets and convert to Degrees Per Second (dps)
+    // 0.00875 is the sensitivity for the +/- 245 dps range
+    float x_dps = (x_raw - x_offset) * 0.00875f;
+    float y_dps = (y_raw - y_offset) * 0.00875f;
+    float z_dps = (z_raw - z_offset) * 0.00875f;
 
-    /* USER CODE BEGIN 3 */
+    // 4. Read Temperature separately
+    int8_t temp = (int8_t)spi_read(0x26);
+
+    // 5. Send to Python using COMMAS (not tabs!)
+    myPrintf("%d,%.2f,%.2f,%.2f\r\n", temp, x_dps, y_dps, z_dps);
+
+    HAL_Delay(10); // Faster update rate for the plot
   }
+
   /* USER CODE END 3 */
 }
 
@@ -402,8 +481,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_RESET);
-
+  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
   /*Configure GPIO pin : PE3 */
   GPIO_InitStruct.Pin = GPIO_PIN_3;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -417,6 +495,83 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void gyro_init ()
+{
+ uint8_t tx [2] = { CTRL_REG1 , CTRL_REG1_VAL };
+ // Pull CS low to begin communication
+ HAL_GPIO_WritePin (GPIOE , GPIO_PIN_3 , GPIO_PIN_RESET );
+
+ // Send control register configuration
+ HAL_SPI_Transmit (&hspi1 , tx , 2, HAL_MAX_DELAY );
+
+ // Pull CS high to end communication
+ HAL_GPIO_WritePin (GPIOE , GPIO_PIN_3 , GPIO_PIN_SET );
+}
+
+void gyro_set_ctrl_reg4 ()
+{
+  uint8_t tx [2] = { CTRL_REG4 , CTRL_REG4_VAL };
+  HAL_GPIO_WritePin (GPIOE , GPIO_PIN_3 , GPIO_PIN_RESET );
+  HAL_SPI_Transmit (& hspi1 , tx , 2, HAL_MAX_DELAY );
+  HAL_GPIO_WritePin (GPIOE , GPIO_PIN_3 , GPIO_PIN_SET );
+}
+
+uint8_t spi_read(uint8_t reg)
+{
+    uint8_t tx[2];
+    uint8_t rx[2];
+    tx[0] = reg | 0x80;  // Read command (MSB = 1)
+    
+    tx[1] = 0x00;
+
+    CS_LOW();
+    HAL_SPI_TransmitReceive(&hspi1, tx, rx, 2, HAL_MAX_DELAY);
+    CS_HIGH();
+
+    return rx[1];
+}
+
+void spi_write(uint8_t reg, uint8_t value)
+{
+    uint8_t data[2] = {reg & 0x7F, value};  // Write command (MSB = 0)
+    CS_LOW();
+    HAL_SPI_Transmit(&hspi1, data, 2, HAL_MAX_DELAY);
+    CS_HIGH();
+}
+
+void myPrintf(const char *fmt, ...)
+{
+  char buffer[256]; 
+  va_list argument;
+  va_start(argument, fmt);
+  vsnprintf(buffer, sizeof(buffer), fmt, argument);
+  HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
+}
+
+
+
+void gyro_calibrate()
+{
+    int32_t x_sum = 0, y_sum = 0, z_sum = 0;
+    const int samples = 30;
+
+    for(int i = 0; i < samples; i++)
+    {
+        int16_t x = (int16_t)(spi_read(OUT_X_H) << 8 | spi_read(OUT_X_L));
+        int16_t y = (int16_t)(spi_read(OUT_Y_H) << 8 | spi_read(OUT_Y_L));
+        int16_t z = (int16_t)(spi_read(OUT_Z_H) << 8 | spi_read(OUT_Z_L));
+
+        x_sum += x;
+        y_sum += y;
+        z_sum += z;
+
+        HAL_Delay(5);
+    }
+
+    x_offset = x_sum / samples;
+    y_offset = y_sum / samples;
+    z_offset = z_sum / samples;
+}
 
 /* USER CODE END 4 */
 
