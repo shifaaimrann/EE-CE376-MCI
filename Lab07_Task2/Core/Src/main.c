@@ -18,12 +18,15 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "arm_math.h"     // CMSIS DSP
+#include "stdio.h"
+#include "string.h"
+#include "arm_math.h"
+
+// Task 2
+#define FILTER_LEN 10
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
 
 /* USER CODE END Includes */
 
@@ -55,83 +58,44 @@ PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
 
-
-#define FILTER_LEN   10        // 10-point moving average filter window
-
-ADC_HandleTypeDef  hadc1;
-UART_HandleTypeDef huart2;
-
-// Filter buffer — stores last 10 ADC samples
-float32_t inputBuffer[FILTER_LEN];
-float32_t output;              // Filtered output value
-uint8_t   bufIndex = 0;        // Circular buffer index
-
-// Raw ADC value (used in interrupt mode)
-volatile uint16_t adc_raw = 0;
-volatile uint8_t  adc_ready = 0;  // Flag: new 
-
-
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_ADC1_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
-static void MX_USART2_UART_Init(void);
 static void MX_USB_PCD_Init(void);
+static void MX_ADC1_Init(void);
+static void MX_USART2_UART_Init(void);
+
+// Task 2
+volatile uint32_t adc_raw;
+volatile uint8_t flag = 0;
+float32_t raw_voltage;
+float32_t filtered_voltage;
+float32_t filter_buffer[FILTER_LEN] = {0};
+uint8_t filter_index = 0;
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-// -------------------------------------------------------
-// Custom UART printf
-// -------------------------------------------------------
-void myprintf(const char *fmt, ...)
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
 {
-    char buffer[128];
-    memset(buffer, 0, sizeof(buffer));
-    va_list args;
-    va_start(args, fmt);
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-    va_end(args);
-    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-}
-
-// -------------------------------------------------------
-// Apply 10-point moving average filter using CMSIS DSP
-// Stores new sample in circular buffer
-// Computes mean of last 10 samples using arm_mean_f32()
-// -------------------------------------------------------
-void apply_moving_average(float32_t new_sample)
-{
-    // Store new sample in circular buffer (overwrites oldest sample)
-    inputBuffer[bufIndex] = new_sample;
-    bufIndex = (bufIndex + 1) % FILTER_LEN;   // Wrap around at 10
-
-    // Compute mean of all 10 samples in buffer using CMSIS DSP
-    arm_mean_f32(inputBuffer, FILTER_LEN, &output);
-}
-
-// -------------------------------------------------------
-// ADC Conversion Complete Callback (Interrupt Mode only)
-// Called automatically by HAL when ADC conversion is done
-// -------------------------------------------------------
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
-{
-    if (hadc->Instance == ADC1)
+    if(hadc->Instance == ADC1)
     {
-        adc_raw = HAL_ADC_GetValue(&hadc1);   // Read converted value
-        adc_ready = 1;                         // Set flag for main loop
+        adc_raw = HAL_ADC_GetValue(hadc);
+        flag = 1;
     }
 }
 
-
+void apply_moving_average(float32_t new_sample) {
+    filter_buffer[filter_index] = new_sample; 
+    filter_index = (filter_index + 1) % FILTER_LEN;
+    arm_mean_f32(filter_buffer, FILTER_LEN, &filtered_voltage);
+}
 /* USER CODE END 0 */
 
 /**
@@ -163,41 +127,60 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_ADC1_Init();
   MX_I2C1_Init();
   MX_SPI1_Init();
-  MX_USART2_UART_Init();
   MX_USB_PCD_Init();
+  MX_ADC1_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_ADC_Start_IT(&hadc1);
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+  // Task 1
+  HAL_ADC_Start(&hadc1);
+  uint32_t adc_value = 0;
+
+  // Task 2
+  HAL_ADC_Start_IT(&hadc1);
   while (1)
   {
     /* USER CODE END WHILE */
-    HAL_ADC_Start_IT(&hadc1);
 
-if (adc_ready)
-{
-   adc_ready = 0;
+    // Task 1
+    // if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK)
+    // {
+    //     adc_value = HAL_ADC_GetValue(&hadc1);
+    //     char msg[30];
+    //     int len = snprintf(msg, sizeof(msg), "ADC Value: %lu\r\n", (unsigned long)adc_value);
+    //     HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
+    // }
 
-   // raw voltage in volts for filtering
-   float32_t raw_v = (float32_t)vin_mv / 1000.0f;
+    // Task 2 (Interrupt Method)
+    // if (flag) 
+    // {
+    //   flag = 0;
+    //   raw_voltage = ((float32_t)adc_raw * 3.3f) / 4095.0f; 
+    //   apply_moving_average(raw_voltage);
+    //   char msg[64];
+    //   int filtered_raw = (int)((filtered_voltage * 4095.0f) / 3.3f);
+    //   int len = snprintf(msg, sizeof(msg), "%lu,%d\r\n", (unsigned long)adc_raw, filtered_raw);
+    //   HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, HAL_MAX_DELAY);
+    // }
 
-   // Apply 10-sample moving average
-   float32_t filt_v = apply_moving_average(raw_v);
-
-   // Print CSV for Python: raw,filtered
-   myprintf("%0.4f,%0.4f\r\n", raw_v, filt_v);
-
-   
-}
-
-HAL_Delay(50);
-
+    // Task 2 (Polling Method)
+    if (HAL_ADC_PollForConversion(&hadc1, 1) == HAL_OK) 
+    {
+      uint32_t adc_val = HAL_ADC_GetValue(&hadc1); 
+      raw_voltage = ((float32_t)adc_val * 3.3f) / 4095.0f;
+      apply_moving_average(raw_voltage);
+      int filtered_raw = (int)((filtered_voltage * 4095.0f) / 3.3f);
+      char msg[32]; 
+      int len = snprintf(msg, sizeof(msg), "%lu,%d\n", (unsigned long)adc_val, filtered_raw);
+      HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 5);
+    }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -279,7 +262,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
@@ -307,7 +290,7 @@ static void MX_ADC1_Init(void)
   sConfig.Channel = ADC_CHANNEL_2;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
-  sConfig.SamplingTime = ADC_SAMPLETIME_61CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_601CYCLES_5;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -494,7 +477,7 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOE, CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10
+  HAL_GPIO_WritePin(GPIOE, CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|LD5_Pin
                           |LD7_Pin|LD9_Pin|LD10_Pin|LD8_Pin
                           |LD6_Pin, GPIO_PIN_RESET);
 
@@ -506,10 +489,10 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : CS_I2C_SPI_Pin LD4_Pin LD3_Pin PE10
+  /*Configure GPIO pins : CS_I2C_SPI_Pin LD4_Pin LD3_Pin LD5_Pin
                            LD7_Pin LD9_Pin LD10_Pin LD8_Pin
                            LD6_Pin */
-  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|GPIO_PIN_10
+  GPIO_InitStruct.Pin = CS_I2C_SPI_Pin|LD4_Pin|LD3_Pin|LD5_Pin
                           |LD7_Pin|LD9_Pin|LD10_Pin|LD8_Pin
                           |LD6_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -546,8 +529,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.
