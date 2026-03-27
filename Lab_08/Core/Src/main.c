@@ -54,7 +54,7 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-//TASK 1-------------------------------------------------------------------------
+// TASK 1-------------------------------------------------------------------------
 // #define GYRO_WHO_AM_I_REG   0x0F   // WHO_AM_I register address
 // #define GYRO_READ_BIT       0x80   // Bit 7 = 1 means READ operation
 
@@ -62,7 +62,7 @@ UART_HandleTypeDef huart2;
 // UART_HandleTypeDef huart2;
 // Gyroscope register addresses
 
-//TASK2------------------------------------------------------------------------------
+// TASK2------------------------------------------------------------------------------
 // #define GYRO_WHO_AM_I_REG   0x0F   // WHO_AM_I register
 // #define GYRO_READ_BIT       0x80   // Bit 7 = 1 for READ operation
 // #define CTRL_REG1           0x20   // Control register 1
@@ -282,19 +282,19 @@ int main(void)
   
   // myprintf("WHO_AM_I = 0x%02X\r\n", who_am_i);
   // CS HIGH at startup — gyroscope deselected/idle
-  //TASK2----------------------------------------------------------------------------
-    // HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
+  // TASK2----------------------------------------------------------------------------
+  //   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_3, GPIO_PIN_SET);
 
-    // // Wait for gyroscope to power up
-    // HAL_Delay(100);
+  //   // Wait for gyroscope to power up
+  //   HAL_Delay(100);
 
-    // // Power on gyroscope and enable axes
-    // gyro_init();
+  //   // Power on gyroscope and enable axes
+  //   gyro_init();
 
-    // HAL_Delay(10);  // Small delay after init before first read
+  //   HAL_Delay(10);  // Small delay after init before first read
 
-    // // Trigger the first temperature read
-    // Gyro_RequestTemperature();
+  //   // Trigger the first temperature read
+  //   Gyro_RequestTemperature();
   //TASK3----------------------------------------------------------------------------------
     
 
