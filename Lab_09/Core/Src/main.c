@@ -94,7 +94,6 @@ PCD_HandleTypeDef hpcd_USB_FS;
 /* --- Drift Analysis --- */
 #define DRIFT_SAMPLES     100           // samples to measure drift over
 
-/* --- Unified Sensor Struct --- */
 typedef struct {
     // Raw gyro
     int16_t gx_raw, gy_raw, gz_raw;
@@ -148,11 +147,7 @@ static void MX_USB_PCD_Init(void);
 // }
 
 //TASK2-----------------------------------------------------------------------------------
-// // ---- UART print (proven working pattern) ----
 
-/* ============================================================
-   UART
-   ============================================================ */
 void myPrintf(const char *fmt, ...)
 {
     char buffer[256];
@@ -163,9 +158,6 @@ void myPrintf(const char *fmt, ...)
     HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
 }
 
-/* ============================================================
-   SPI HELPERS
-   ============================================================ */
 uint8_t spi_read(uint8_t reg)
 {
     uint8_t tx[2] = { reg | 0x80, 0x00 };
@@ -184,9 +176,6 @@ void spi_write(uint8_t reg, uint8_t value)
     CS_HIGH();
 }
 
-/* ============================================================
-   GYROSCOPE FUNCTIONS
-   ============================================================ */
 void Gyro_Init(void)
 {
     uint8_t tx[2];
@@ -310,9 +299,6 @@ void Accel_Read(void)
     sensor.roll  = atan2f(sensor.ay_g, sensor.az_g) * RAD_TO_DEG;
 }
 
-/* ============================================================
-   DRIFT ANALYSIS
-   ============================================================ */
 void Sensor_AnalyseDrift(void)
 {
     float gyro_min = 999999.0f, gyro_max = -999999.0f;
@@ -365,9 +351,6 @@ void Sensor_AnalyseDrift(void)
     myPrintf("--- End Drift Analysis ---\r\n\r\n");
 }
 
-/* ============================================================
-   PRINT - All 7 values labeled
-   ============================================================ */
 void Sensor_Print(void)
 {
     myPrintf("aX:%.2f,aY:%.2f,aZ:%.2f,gX:%.2f,gY:%.2f,gZ:%.2f,pitch:%.2f\r\n",
