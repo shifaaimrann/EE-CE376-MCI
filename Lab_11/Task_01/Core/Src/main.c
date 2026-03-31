@@ -57,6 +57,8 @@ UART_HandleTypeDef huart2;
 PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
+//ACCELEROMETER---------------------------------------------------------------
+
 #define ACC_ADDR        (0x19 << 1)
 #define CTRL_REG1_A     0x20
 #define CTRL_REG4_A     0x23
@@ -76,6 +78,28 @@ typedef struct
 
 AccelData acc;
 
+//GYROSCOPE---------------------------------------------------------------
+
+#define WHO_AM_I_G  0x0F
+
+#define GYRO_ADDR       (0x6A << 1)   // if not working, try (0x6A << 1)
+#define CTRL_REG1_G     0x20
+#define CTRL_REG4_G     0x23
+#define OUT_X_L_G       0x28
+
+volatile uint8_t gyro_ready = 0;
+
+typedef struct
+{
+    int16_t x_raw;
+    int16_t y_raw;
+    int16_t z_raw;
+    float x_dps;
+    float y_dps;
+    float z_dps;
+} GyroData;
+
+GyroData gyro;
 
 /* USER CODE END PV */
 
@@ -145,11 +169,56 @@ void accel_process(void)
     accel_convert_to_g();
 }
 
+// void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+// {
+//     if (htim->Instance == TIM6)
+//     {
+//         accel_ready = 1;
+//     }
+// }
+//GYROSCOPE---------------------------------------------------------------
+
+void gyro_init(void)
+{
+    uint8_t data;
+
+    data = 0x0F;   // power on, normal mode, X/Y/Z enable
+    HAL_I2C_Mem_Write(&hi2c1, GYRO_ADDR, CTRL_REG1_G, I2C_MEMADD_SIZE_8BIT, &data, 1, HAL_MAX_DELAY);
+
+    data = 0x80;   // BDU = 1, low full-scale mode
+    HAL_I2C_Mem_Write(&hi2c1, GYRO_ADDR, CTRL_REG4_G, I2C_MEMADD_SIZE_8BIT, &data, 1, HAL_MAX_DELAY);
+}
+
+void gyro_read_raw(void)
+{
+    uint8_t buf[6];
+
+    HAL_I2C_Mem_Read(&hi2c1, GYRO_ADDR, OUT_X_L_G | 0x80, I2C_MEMADD_SIZE_8BIT, buf, 6, HAL_MAX_DELAY);
+
+    gyro.x_raw = (int16_t)((buf[1] << 8) | buf[0]);
+    gyro.y_raw = (int16_t)((buf[3] << 8) | buf[2]);
+    gyro.z_raw = (int16_t)((buf[5] << 8) | buf[4]);
+}
+
+void gyro_convert_to_dps(void)
+{
+    gyro.x_dps = gyro.x_raw * 0.00875f;
+    gyro.y_dps = gyro.y_raw * 0.00875f;
+    gyro.z_dps = gyro.z_raw * 0.00875f;
+}
+
+void gyro_process(void)
+{
+    gyro_read_raw();
+    gyro_convert_to_dps();
+}
+
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM6)
     {
-        accel_ready = 1;
+        gyro_ready = 1;
     }
 }
 
@@ -198,34 +267,55 @@ int main(void)
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
 //ACCELEROMETER---------------------------------------------------------------
+  // HAL_Delay(100);
+  // accel_init();
+
+  // HAL_TIM_Base_Start_IT(&htim6);
+
+  // myprintf("Accelerometer start\r\n");
+  //GYROSCOPE-----------------------------------------------------------------
   HAL_Delay(100);
-  accel_init();
+  gyro_init();
 
   HAL_TIM_Base_Start_IT(&htim6);
 
-  myprintf("Accelerometer start\r\n");
+  myprintf("Gyroscope start\r\n");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    //ACCELEROMETER---------------------------------------------------------------
-    if (accel_ready)
-        {
-            accel_ready = 0;
+    
+    // if (accel_ready)
+    //     {
+    //         accel_ready = 0;
 
-            accel_process();
+    //         accel_process();
 
-            myprintf("X=%d Y=%d Z=%d | X=%.3fg Y=%.3fg Z=%.3fg\r\n",
-                     acc.x_raw, acc.y_raw, acc.z_raw,
-                     acc.x_g, acc.y_g, acc.z_g);
-            HAL_Delay(1000);
+    //         myprintf("X=%d Y=%d Z=%d | X=%.3fg Y=%.3fg Z=%.3fg\r\n",
+    //                  acc.x_raw, acc.y_raw, acc.z_raw,
+    //                  acc.x_g, acc.y_g, acc.z_g);
+    //         HAL_Delay(1000);
             
+    //     }
+    if (gyro_ready)
+        {
+            gyro_ready = 0;
+
+            gyro_process();
+
+            myprintf("X=%d Y=%d Z=%d | X=%.3f dps Y=%.3f dps Z=%.3f dps\r\n",
+                     gyro.x_raw, gyro.y_raw, gyro.z_raw,
+                     gyro.x_dps, gyro.y_dps, gyro.z_dps);
+            HAL_Delay(1000);
         }
     }
 
     }
+
+  
   
     /* USER CODE END WHILE */
 
