@@ -1,0 +1,8 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/administrator/Downloads/EE-CE376-MCI/Lab_06/build/Debug/cmake_install.cmake",
+		"/home/administrator/Downloads/EE-CE376-MCI/Lab_06/build/Debug/cmake/stm32cubemx/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
