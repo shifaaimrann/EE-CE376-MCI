@@ -58,16 +58,29 @@ UART_HandleTypeDef huart2;
 PCD_HandleTypeDef hpcd_USB_FS;
 
 /* USER CODE BEGIN PV */
-//ACCELEROMETER---------------------------------------------------------------
+/* Accelerometer Defines */
+#define ACC_ADDR            (0x19 << 1)
+#define CTRL_REG1_A         0x20
+#define CTRL_REG4_A         0x23
+#define OUT_X_L_A           0x28
 
-#define ACC_ADDR        (0x19 << 1)
-#define CTRL_REG1_A     0x20
-#define CTRL_REG4_A     0x23
-#define OUT_X_L_A       0x28
+/* Gyroscope Defines */
+#define GYRO_CS_PORT        GPIOE
+#define GYRO_CS_PIN         GPIO_PIN_3
+#define GYRO_WHO_AM_I_REG   0x0F
+#define GYRO_READ_BIT       0x80
+#define GYRO_MULTI_BIT      0x40
+#define CTRL_REG1_G         0x20
+#define CTRL_REG4_G         0x23
+#define OUT_X_L_G           0x28
 
+/* Sensor Sensitivity & Constants */
+#define ACC_SENS            0.00098f
+#define GYRO_SENS           0.00875f
+#define RAD_TO_DEG          57.2957795f
+#define DT                  0.005f      /* 200 Hz sampling: dt = 1/200 = 0.005s */
 
-volatile uint8_t accel_ready = 0;
-
+/* Data Structures */
 typedef struct
 {
     int16_t x_raw;
@@ -77,23 +90,6 @@ typedef struct
     float y_g;
     float z_g;
 } AccelData;
-
-AccelData acc;
-
-//GYROSCOPE---------------------------------------------------------------
-
-#define GYRO_CS_PORT CS_I2C_SPI_GPIO_Port
-#define GYRO_CS_PIN  CS_I2C_SPI_Pin
-
-#define GYRO_WHO_AM_I_REG   0x0F
-#define GYRO_READ_BIT       0x80
-#define GYRO_MULTI_BIT      0x40
-
-#define CTRL_REG1           0x20
-#define CTRL_REG4           0x23
-#define OUT_X_L            0x28
-
-volatile uint8_t gyro_ready = 0;
 
 typedef struct
 {
@@ -105,22 +101,15 @@ typedef struct
     float z_dps;
 } GyroData;
 
+/* Global Variables */
+AccelData acc;
 GyroData gyro;
-//BOTH------------------------------------------------------------------------------
-
-#define OUT_X_L_G           0x28
-//filter
-#define ACC_SENS            0.00098f
-#define GYRO_SENS           0.00875f
-#define RAD_TO_DEG          57.2957795f
-#define DT                  0.01f
-
 volatile uint8_t sample_ready = 0;
-//angleeeeee
+
+float acc_offset = 0.0f;
 float acc_angle = 0.0f;
 float gyro_rate = 0.0f;
 float angle = 0.0f;
-float acc_offset = 0.0f;
 
 
 
@@ -141,26 +130,27 @@ static void MX_TIM6_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 //ACCELEROMETER---------------------------------------------------------------
-// void myprintf(const char *fmt, ...)
-// {
-//     char buffer[128];
-//     va_list args;
+void myprintf(const char *fmt, ...)
+{
+    char buffer[128];
+    va_list args;
 
-//     va_start(args, fmt);
-//     vsnprintf(buffer, sizeof(buffer), fmt, args);
-//     va_end(args);
+    va_start(args, fmt);
+    vsnprintf(buffer, sizeof(buffer), fmt, args);
+    va_end(args);
 
-//     HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-// }
+    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
+}
 
+/* Accelerometer Functions */
 void accel_init(void)
 {
     uint8_t data;
 
-    data = 0x57;
+    data = 0x57;    /* ODR=100Hz, all axes enabled */
     HAL_I2C_Mem_Write(&hi2c1, ACC_ADDR, CTRL_REG1_A, I2C_MEMADD_SIZE_8BIT, &data, 1, HAL_MAX_DELAY);
 
-    data = 0x88;
+    data = 0x88;    /* Full scale ±16g */
     HAL_I2C_Mem_Write(&hi2c1, ACC_ADDR, CTRL_REG4_A, I2C_MEMADD_SIZE_8BIT, &data, 1, HAL_MAX_DELAY);
 }
 
@@ -174,46 +164,20 @@ void accel_read_raw(void)
     acc.y_raw = (int16_t)((buf[3] << 8) | buf[2]);
     acc.z_raw = (int16_t)((buf[5] << 8) | buf[4]);
 
-    acc.x_raw = acc.x_raw >> 4;
-    acc.y_raw = acc.y_raw >> 4;
-    acc.z_raw = acc.z_raw >> 4;
+    acc.x_raw >>= 4;
+    acc.y_raw >>= 4;
+    acc.z_raw >>= 4;
 }
 
 void accel_convert(void)
 {
-    acc.x_g = acc.x_raw * 0.00098f;
-    acc.y_g = acc.y_raw * 0.00098f;
-    acc.z_g = acc.z_raw * 0.00098f;
+    acc.x_g = acc.x_raw * ACC_SENS;
+    acc.y_g = acc.y_raw * ACC_SENS;
+    acc.z_g = acc.z_raw * ACC_SENS;
 }
 
-void accel_process(void)
-{
-    accel_read_raw();
-    accel_convert();
-}
-
-// void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-// {
-//     if (htim->Instance == TIM6)
-//     {
-//         accel_ready = 1;
-//     }
-// }
-//GYROSCOPE---------------------------------------------------------------
-
-void myprintf(const char *fmt, ...)
-{
-    char buffer[128];
-    va_list args;
-
-    va_start(args, fmt);
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-    va_end(args);
-
-    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
-}
-
-uint8_t Gyro_ReadRegister(uint8_t reg_addr)
+/* Gyroscope Functions (SPI) */
+uint8_t gyro_read_register(uint8_t reg_addr)
 {
     uint8_t cmd = GYRO_READ_BIT | reg_addr;
     uint8_t response = 0;
@@ -226,7 +190,7 @@ uint8_t Gyro_ReadRegister(uint8_t reg_addr)
     return response;
 }
 
-void Gyro_WriteRegister(uint8_t reg_addr, uint8_t value)
+void gyro_write_register(uint8_t reg_addr, uint8_t value)
 {
     uint8_t tx[2];
 
@@ -238,19 +202,13 @@ void Gyro_WriteRegister(uint8_t reg_addr, uint8_t value)
     HAL_GPIO_WritePin(GYRO_CS_PORT, GYRO_CS_PIN, GPIO_PIN_SET);
 }
 
-void gyro_check_id(void)
-{
-    uint8_t who_am_i = Gyro_ReadRegister(GYRO_WHO_AM_I_REG);
-    myprintf("WHO_AM_I = 0x%02X\r\n", who_am_i);
-}
-
 void gyro_init(void)
 {
     HAL_GPIO_WritePin(GYRO_CS_PORT, GYRO_CS_PIN, GPIO_PIN_SET);
     HAL_Delay(100);
 
-    Gyro_WriteRegister(CTRL_REG1, 0x0F);   // Power on, normal mode, X/Y/Z enable
-    Gyro_WriteRegister(CTRL_REG4, 0x80);   // BDU=1, 245 dps full scale
+    gyro_write_register(CTRL_REG1_G, 0x0F);   /* Power on, all axes enabled */
+    gyro_write_register(CTRL_REG4_G, 0x80);   /* BDU=1, 245 dps full scale */
 }
 
 void gyro_read_raw(void)
@@ -258,13 +216,9 @@ void gyro_read_raw(void)
     uint8_t tx[7];
     uint8_t rx[7];
 
-    tx[0] = GYRO_READ_BIT | GYRO_MULTI_BIT | OUT_X_L;
-    tx[1] = 0x00;
-    tx[2] = 0x00;
-    tx[3] = 0x00;
-    tx[4] = 0x00;
-    tx[5] = 0x00;
-    tx[6] = 0x00;
+    tx[0] = GYRO_READ_BIT | GYRO_MULTI_BIT | OUT_X_L_G;
+    for (int i = 1; i < 7; i++)
+        tx[i] = 0x00;
 
     HAL_GPIO_WritePin(GYRO_CS_PORT, GYRO_CS_PIN, GPIO_PIN_RESET);
     HAL_SPI_TransmitReceive(&hspi1, tx, rx, 7, HAL_MAX_DELAY);
@@ -277,40 +231,12 @@ void gyro_read_raw(void)
 
 void gyro_convert(void)
 {
-    gyro.x_dps = gyro.x_raw * 0.00875f;
-    gyro.y_dps = gyro.y_raw * 0.00875f;
-    gyro.z_dps = gyro.z_raw * 0.00875f;
+    gyro.x_dps = gyro.x_raw * GYRO_SENS;
+    gyro.y_dps = gyro.y_raw * GYRO_SENS;
+    gyro.z_dps = gyro.z_raw * GYRO_SENS;
 }
 
-void gyro_process(void)
-{
-    gyro_read_raw();
-    gyro_convert();
-}
-
-// void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-// {
-//     if (htim->Instance == TIM6)
-//     {
-//         gyro_ready = 1;
-//     }
-// }
-
-void imu_process(void)
-{
-    accel_read_raw();
-    accel_convert();
-
-    gyro_read_raw();
-    gyro_convert();
-
-    acc_angle = atan2f(acc.x_g, acc.z_g) * RAD_TO_DEG - acc_offset;
-
-    gyro_rate = gyro.y_dps;
-
-    angle = 0.95f * (angle + gyro_rate * DT) + 0.05f * acc_angle;
-}
-
+/* Timer Interrupt Callback */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     if (htim->Instance == TIM6)
@@ -318,6 +244,26 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         sample_ready = 1;
     }
 }
+
+/* IMU Processing with Complementary Filter (Y-axis) */
+void imu_process(void)
+{
+    /* Read sensors */
+    accel_read_raw();
+    accel_convert();
+    gyro_read_raw();
+    gyro_convert();
+
+    /* Y-axis angle from accelerometer: atan2(y_g, z_g) */
+    acc_angle = atan2f(acc.y_g, acc.z_g) * RAD_TO_DEG - acc_offset;
+
+    /* Y-axis angular velocity from gyroscope */
+    gyro_rate = gyro.y_dps;
+
+    /* Complementary Filter: 98% gyro integration + 2% accelerometer correction */
+    angle = 0.98f * (angle + gyro_rate * DT) + 0.02f * acc_angle;
+}
+
 
 /* USER CODE END 0 */
 
@@ -381,27 +327,28 @@ int main(void)
   //   myprintf("Gyroscope start\r\n");
 
   //BOTH------------------------------------------------------------------------
+  HAL_Delay(100);
+
+  /* Initialize sensors */
   accel_init();
   gyro_init();
 
-  HAL_Delay(100);
-
-  // Read once to compute offset
+  /* Calibrate offset: read accelerometer once to get initial angle */
   accel_read_raw();
   accel_convert();
+  acc_offset = atan2f(acc.y_g, acc.z_g) * RAD_TO_DEG;
 
-  acc_offset = atan2f(acc.x_g, acc.z_g) * RAD_TO_DEG;
-
-  // Reset angles
-  acc_angle = 0.0f;
+  /* Reset filtered angle to zero */
   angle = 0.0f;
+  acc_angle = 0.0f;
+  gyro_rate = 0.0f;
 
   HAL_TIM_Base_Start_IT(&htim6);
 
+  myprintf("\r\n=== Task 1: IMU Angle Estimation (Y-axis) ===\r\n");
+  myprintf("Sampling at 200 Hz with Complementary Filter\r\n\r\n");
 
 
-
-  myprintf("IMU start\r\n");
 
   /* USER CODE END 2 */
 
@@ -439,8 +386,9 @@ int main(void)
 
             imu_process();
 
-            myprintf("%.2f,%.2f,%.2f\r\n", angle, acc_angle, gyro_rate);
-            HAL_Delay(100);
+            /* Output 3 labeled values: Filtered Angle | Accel Angle | Gyro Rate */
+            myprintf("Angle=%.2f | AccAngle=%.2f | GyroRate=%.2f\r\n",
+                     angle, acc_angle, gyro_rate);
         }
 
 
