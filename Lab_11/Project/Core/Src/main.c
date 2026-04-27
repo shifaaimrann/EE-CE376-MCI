@@ -25,6 +25,7 @@
 #include "imu.h"
 #include "pid.h"
 #include "bluetooth.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -39,7 +40,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-
+extern float SETPOINT;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -133,21 +134,20 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
   if (htim->Instance == TIM6)
   {
-    /* Step 1: Update Tilt Angle */
-    // Uses complementary filter: 0.98*gyro + 0.02*accel [cite: 19, 238]
+    /* 1. Read Sensor */
     IMU_Process();
     float current_angle = IMU_GetAngle();
 
-    /* Step 2: Compute Control Signal */
-    // Position PID uses angle as primary feedback [cite: 163, 193, 200]
+    /* 2. Compute Single Angle Loop */
+    // It will use the fixed 0.27f SETPOINT from pid.c
     float pid_output = PID_Compute(current_angle);
 
-    /* Step 3: Drive Motors */
-    // Positive angle -> Clockwise; Negative angle -> Counterclockwise [cite: 170, 292, 293]
+    /* 3. Drive Motors */
     Motor_SetSpeed((int16_t)pid_output, (int16_t)pid_output);
   }
 }

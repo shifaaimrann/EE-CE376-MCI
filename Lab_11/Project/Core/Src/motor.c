@@ -1,7 +1,7 @@
 #include "motor.h"
 
 extern TIM_HandleTypeDef htim3;
-
+#define DEADBAND 3
 /**
  * @brief Initializes the PWM timer channels for the motors.
  */
@@ -16,29 +16,41 @@ void Motor_Init(void) {
  * Positive speed = Clockwise, Negative speed = Counterclockwise[cite: 292, 293].
  */
 void Motor_SetSpeed(int16_t left_speed, int16_t right_speed) {
-    // Left Motor Logic (PD10, PD11, TIM3_CH2)
+    // 1. Apply Deadband (Only if PID requests movement)
+    if (left_speed > 0) left_speed += DEADBAND;
+    else if (left_speed < 0) left_speed -= DEADBAND;
+
+    if (right_speed > 0) right_speed += DEADBAND;
+    else if (right_speed < 0) right_speed -= DEADBAND;
+
+    // 2. Output Saturation (Prevent exceeding Timer Period of 1000)
+    if (left_speed > 1000) left_speed = 1000;
+    if (left_speed < -1000) left_speed = -1000;
+    if (right_speed > 1000) right_speed = 1000;
+    if (right_speed < -1000) right_speed = -1000;
+
+    // 3. Left Motor (PD10, PD11, TIM3_CH2)
     if (left_speed >= 0) {
         HAL_GPIO_WritePin(GPIOD, GPIO_PIN_10, GPIO_PIN_SET);
         HAL_GPIO_WritePin(GPIOD, GPIO_PIN_11, GPIO_PIN_RESET);
     } else {
         HAL_GPIO_WritePin(GPIOD, GPIO_PIN_10, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(GPIOD, GPIO_PIN_11, GPIO_PIN_SET);
-        left_speed = -left_speed; // Absolute value for PWM
+        left_speed = -left_speed; 
     }
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, left_speed);
 
-    // Right Motor Logic (PD8, PD9, TIM3_CH1)
+    // 4. Right Motor (PD8, PD9, TIM3_CH1)
     if (right_speed >= 0) {
         HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_SET);
         HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, GPIO_PIN_RESET);
     } else {
         HAL_GPIO_WritePin(GPIOD, GPIO_PIN_8, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(GPIOD, GPIO_PIN_9, GPIO_PIN_SET);
-        right_speed = -right_speed; // Absolute value for PWM
+        right_speed = -right_speed; 
     }
     __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, right_speed);
 }
-
 void Motor_Stop(void) {
     Motor_SetSpeed(0, 0);
 }

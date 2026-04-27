@@ -4,7 +4,7 @@
 #include "main.h"
 
 /* Controller constants from Lab Manual */
-#define SETPOINT 0.2f  /* Target is the upright vertical position [cite: 195] */
+//#define SETPOINT 0.2f  /* Target is the upright vertical position [cite: 195] */
 #define DT 0.005f      /* Must match IMU sampling rate [cite: 210] */
 
 /* Global Gains for Bluetooth Tuning */
